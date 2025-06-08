@@ -119,7 +119,7 @@ st.markdown("""
         display: flex;
         flex-direction: column;
         justify-content: center;
-        box-shadow: 0 8px 16px rgba(0,0,0,0.3);
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
     }
     .hero-text {
         font-size: 20px;
@@ -131,7 +131,7 @@ st.markdown("""
         background: #0F172A;
         padding: 30px;
         border-radius: 12px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
         margin: 20px 0;
         border: 1px solid #2DD4BF;
     }
@@ -150,7 +150,7 @@ st.markdown("""
         background: #1E293B;
         padding: 20px;
         border-radius: 12px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
         margin: 20px 0;
         border: 1px solid #2DD4BF;
     }
@@ -184,7 +184,7 @@ st.markdown("""
         background: linear-gradient(180deg, #0F172A, #1E293B);
         padding: 20px;
         border-radius: 10px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     }
     .sidebar-header {
         font-size: 24px;
@@ -267,7 +267,7 @@ st.markdown("""
         background: #0F172A;
         padding: 30px;
         border-radius: 12px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
         margin: 20px 0;
         border: 1px solid #2DD4BF;
     }
@@ -303,7 +303,7 @@ st.markdown("""
         background: #0F172A;
         padding: 30px;
         border-radius: 12px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
         margin: 20px 0;
         border: 1px solid #2DD4BF;
     }
@@ -322,7 +322,7 @@ st.markdown("""
         background: #1E293B;
         padding: 20px;
         border-radius: 12px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
         margin-bottom: 20px;
         border: 1px solid #2DD4BF;
     }
@@ -335,7 +335,7 @@ st.markdown("""
         background: #1E293B;
         padding: 15px;
         border-radius: 12px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
         margin: 10px 0;
     }
     .contact-links {
@@ -792,7 +792,7 @@ if df is not None:
         """, unsafe_allow_html=True)
         
         # Filters
-        st.markdown('<div class="filter-container"><h4>Filter Customers</h4></div>', unsafe_allow_html=True)
+        st.markdown('<div class="filter-container"><h4>Filter Data</h4></div>', unsafe_allow_html=True)
         with st.container():
             col1, col2, col3 = st.columns(3)
             with col1:
@@ -815,7 +815,7 @@ if df is not None:
                     int(df['tenure'].min()),
                     int(df['tenure'].max()),
                     (int(df['tenure'].min()), int(df['tenure'].max())),
-                    key="tenure_range"
+                    key="dash_tenure"
                 )
             filtered_df = filtered_df[
                 (filtered_df['gender'].isin(selected_gender)) &
@@ -894,7 +894,7 @@ if df is not None:
                 y='MonthlyCharges',
                 color='Churn',
                 title="Tenure vs Monthly Charges",
-                color_discrete_sequence=['#F43F5E', '#2DD4BF'],
+                color_discrete_sequence=['#F4F5E', '#2DD4BF'],
                 hover_data=['Contract'],
                 template='plotly_dark'
             )
@@ -1221,21 +1221,22 @@ if df is not None:
                                         if input_data[col].iloc[0] in le_dict[col].classes_:
                                             input_data[col] = le_dict[col].transform([input_data[col].iloc[0]])[0]
                                         else:
-                                            st.error(f"Error: Value '{col}' in input_data['{col}'] is not recognized. Please select a valid option.")
+                                            st.error(f"Value '{input_data[col].iloc[0]}' in {col} is not recognized. Please select a valid option.")
                                             st.stop()
                                 prediction = model.predict(input_data)
                                 prob = model.predict_proba(input_data)[0]
                                 st.markdown('<div class="metric-box">', unsafe_allow_html=True)
-                                st.write(f"Prediction: {prediction[0]: 'Churn' if prediction[0] == 1 else 'No Churn'}")
-                                st.write(f"Probability of Churn: {prob[1]:.2%}")
+                                st.write(f"**Prediction**: {'Churn' if prediction[0] == 1 else 'No Churn'}")
+                                st.write(f"**Churn Probability**: {prob[1]:.2%}")
                                 st.markdown('</div>', unsafe_allow_html=True)
                             except Exception as e:
                                 st.error(f"Prediction error: {e}. Please check input data.")
-                st.markdown('</div>', unsafe_html=True)
-else:
-                st.markdown('<div class="metric-box">', unsafe_allow_html=True)
-                st.error("Error: Please ensure the dataset file 'customer_churn_data.csv' is available in the correct directory. Some features will be disabled.")
                 st.markdown('</div>', unsafe_allow_html=True)
+
+else:
+    st.markdown('<div class="metric-box">', unsafe_allow_html=True)
+    st.error("Error: Please ensure the dataset file 'customer_churn_data.csv' is available in the correct directory. Some features will be disabled.")
+    st.markdown('</div>', unsafe_allow_html=True)
     
     # Display limited Home page without data
     if st.session_state.page == "Home":
@@ -1243,10 +1244,8 @@ else:
             <div class="hero-section">
                 <h1 class="main-header">Customer Churn Analysis Dashboard</h1>
                 <p class="hero-text">
-                    A comprehensive platform for analyzing customer behavior, identifying at-risk customers 
-                    and churn drivers, and predicting to inform strategic retention efforts.
+                    A comprehensive platform for analyzing customer behavior, identifying churn drivers, and predicting at-risk customers to inform strategic retention efforts.
                 </p>
-            </div>
         """, unsafe_allow_html=True)
 
         # View Documentation
@@ -1256,7 +1255,7 @@ else:
         """, unsafe_allow_html=True)
 
         st.markdown('<p class="sub-header">Get Started</p>', unsafe_allow_html=True)
-        if st.button("Explore the Dashboard", key="explore_button"):
+        if st.button("Explore the Dashboard", key="explore_dashboard_no_data"):
             st.session_state.page = "Dashboard"
             st.rerun()
 
@@ -1268,7 +1267,7 @@ else:
                 <ul>
                     <li>Customer Demographics: Gender, Senior Citizen status, Partner, Dependents.</li>
                     <li>Service Subscriptions: Phone, Internet, Online Security, Streaming, and more.</li>
-                    <li>Billing Information: Contract types, payment methods, Monthly and Total Charges.</li>
+                    <li>Billing Information: Contract types, Payment methods, Monthly and Total Charges.</li>
                     <li>Churn Status: Indicates whether a customer has churned (Yes/No).</li>
                 </ul>
                 <p><b>Note:</b> Please upload the dataset to enable full functionality.</p>
@@ -1281,4 +1280,4 @@ else:
                 <p>Churn Analytics Dashboard v1.0.0</p>
                 <p>Powered by <a href="https://felido01.github.io/felixidowu01/intro.html" target="_blank">Felixidowu</a></p>
             </div>
-        """, unsafe_allow_html=True)
+        ''', unsafe_allow_html=True)
