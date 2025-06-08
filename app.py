@@ -734,10 +734,10 @@ if df is not None:
             """, unsafe_allow_html=True)
         with col2:
             st.markdown(f"""
-               <div class="metric-box" style="display: flex; flex-direction: column;">
-    <h3>{total_customers:,}</h3>
-    <p>Total Customers</p>
-</div>
+              <div class="metric-box">
+                    <h3>{total_customers:,}</h3>
+                    <p>Total Customers Count</p>
+                </div>
             """, unsafe_allow_html=True)
         with col3:
             st.markdown(f"""
