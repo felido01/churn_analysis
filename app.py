@@ -353,7 +353,7 @@ st.markdown("""
         color: #F43F5E;
         transform: scale(1.2);
     }
-    @keyframes fadeIn {
+    @keyframes touch {
         from { opacity: 0; transform: translateY(10px); }
         to { opacity: 1; transform: translateY(0); }
     }
@@ -385,7 +385,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Expected columns
-EXPECTED_COLUMNS = [
+DATASET_COLUMNS = [
     'customerID', 'gender', 'SeniorCitizen', 'Partner', 'Dependents', 'tenure',
     'PhoneService', 'MultipleLines', 'InternetService', 'OnlineSecurity',
     'OnlineBackup', 'DeviceProtection', 'TechSupport', 'StreamingTV',
@@ -394,25 +394,25 @@ EXPECTED_COLUMNS = [
 ]
 
 # Load data with validation
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=True)
 def load_data():
     try:
-        df = pd.read_csv("customer_churn_data.csv")
-        missing_cols = [col for col in EXPECTED_COLUMNS if col not in df.columns]
+        df = pd.read_csv("churn_data.csv")
+        missing_cols = [col for col in DATASET_COLUMNS if col not in df.columns]
         if missing_cols:
             st.error(f"Missing columns: {', '.join(missing_cols)}. Please ensure the dataset contains all required columns.")
             return None
         categorical_cols = [
             col for col in df.columns 
-            if col in EXPECTED_COLUMNS and col != 'customerID' and df[col].dtype == 'object'
+            if col in DATASET_COLUMNS and col != 'customerID' and df[col].dtype == 'object'
         ]
         for col in categorical_cols:
             if df[col].isnull().any():
-                st.warning(f"Column {col} contains missing values. Filling with most frequent value.")
+                st.warning(f"Column {col} contains missing values. Filling with mode.")
                 df[col] = df[col].fillna(df[col].mode()[0])
         return df
     except FileNotFoundError:
-        st.error("Dataset file 'customer_churn_data.csv' not found. Please ensure the file is in the correct directory.")
+        st.error("Dataset file 'churn_data.csv' not found. Please ensure the file is in the correct directory.")
         return None
     except Exception as e:
         st.error(f"Error loading data: {e}. Please check the file format and content.")
@@ -424,12 +424,12 @@ def preprocess_data(df):
         df_clean = df.copy()
         df_clean['TotalCharges'] = pd.to_numeric(df_clean['TotalCharges'], errors='coerce')
         if df_clean['TotalCharges'].isnull().any():
-            st.warning("Found missing or invalid values in TotalCharges. Imputing with median.")
+            st.warning("Invalid TotalCharges detected. Imputing with median.")
             df_clean['TotalCharges'] = df_clean['TotalCharges'].fillna(df_clean['TotalCharges'].median())
         le_dict = {}
         categorical_cols = [
             col for col in df_clean.columns 
-            if col in EXPECTED_COLUMNS and col != 'customerID' and df_clean[col].dtype == 'object'
+            if col in DATASET_COLUMNS and col != 'customerID' and df_clean[col].dtype == 'object'
         ]
         for col in categorical_cols:
             le = LabelEncoder()
@@ -437,7 +437,7 @@ def preprocess_data(df):
             le_dict[col] = le
         return df_clean, le_dict
     except Exception as e:
-        st.error(f"Error in preprocessing: {e}. Please check data consistency.")
+        st.error(f"Preprocessing error: {e}. Check data consistency.")
         return None, None
 
 # Train model
@@ -452,12 +452,12 @@ def train_model(X, y, model_type='RandomForest', n_estimators=100, max_depth=Non
         y_pred = model.predict(X_test)
         return model, X_test, y_test, y_pred
     except Exception as e:
-        st.error(f"Error training model: {e}. Please check feature data.")
+        st.error(f"Model training error: {e}. Check feature data.")
         return None, None, None, None
 
 # Generate analysis report
 def generate_analysis_report(df, model=None, X_test=None, y_test=None, y_pred=None, model_type=None):
-    report = ["Customer Churn Analysis Report", "=" * 40, ""]
+    report = ["Customer Churn Analysis Report", "=" * 50, ""]
     
     # Key Metrics
     churn_rate = df['Churn'].value_counts(normalize=True).get('Yes', 0) * 100
@@ -466,8 +466,8 @@ def generate_analysis_report(df, model=None, X_test=None, y_test=None, y_pred=No
     avg_monthly = df['MonthlyCharges'].mean()
     senior_pct = (df['SeniorCitizen'] == 1).mean() * 100
     
-    report.append("Key Metrics")
-    report.append("-" * 20)
+    report.append("Key Metrics:")
+    report.append("-" * 30)
     report.append(f"Total Customers: {total_customers:,}")
     report.append(f"Churn Rate: {churn_rate:.1f}%")
     report.append(f"Average Tenure: {avg_tenure:.1f} months")
@@ -476,8 +476,8 @@ def generate_analysis_report(df, model=None, X_test=None, y_test=None, y_pred=No
     report.append("")
     
     # Data Insights
-    report.append("Data Insights")
-    report.append("-" * 20)
+    report.append("Data Insights:")
+    report.append("-" * 30)
     contract_churn = df.groupby('Contract')['Churn'].value_counts(normalize=True).unstack().fillna(0)
     report.append("Churn by Contract Type:")
     for contract in contract_churn.index:
@@ -493,8 +493,8 @@ def generate_analysis_report(df, model=None, X_test=None, y_test=None, y_pred=No
     
     # Model Performance
     if model is not None and y_test is not None and y_pred is not None:
-        report.append("Model Performance")
-        report.append("-" * 20)
+        report.append("Model Performance:")
+        report.append("-" * 30)
         report.append(f"Model Type: {model_type}")
         report.append(f"Accuracy: {accuracy_score(y_test, y_pred):.2f}")
         report.append("\nClassification Report:")
@@ -505,7 +505,7 @@ def generate_analysis_report(df, model=None, X_test=None, y_test=None, y_pred=No
                 'feature': X_test.columns,
                 'importance': model.feature_importances_
             }).sort_values(by='importance', ascending=False)
-            report.append("\nFeature Importance (Top 5):")
+            report.append("\nTop 5 Feature Importance:")
             for i, row in feature_importance.head(5).iterrows():
                 report.append(f"- {row['feature']}: {row['importance']:.3f}")
     
@@ -594,7 +594,6 @@ with st.sidebar.expander("Download Reports", expanded=False):
             key="download_data"
         )
         
-        # Generate report based on current data
         report_data = generate_analysis_report(st.session_state.df)
         st.download_button(
             label="Download Analysis Report",
@@ -632,7 +631,7 @@ with st.sidebar.expander("Help & Support", expanded=False):
         st.markdown("""
             <div class="collapsible-section">
                 <h4>Dataset Requirements</h4>
-                <p>Ensure the dataset ('customer_churn_data.csv') includes all required columns: customerID, gender, SeniorCitizen, etc.</p>
+                <p>Ensure the dataset ('churn_data.csv') includes all required columns: customerID, gender, SeniorCitizen, etc.</p>
                 <p>Categorical columns should have consistent values (e.g., 'Yes'/'No' for Churn).</p>
                 <p>Numerical columns like tenure and MonthlyCharges should not contain invalid values.</p>
             </div>
@@ -642,7 +641,7 @@ with st.sidebar.expander("Help & Support", expanded=False):
             <div class="collapsible-section">
                 <h4>Troubleshooting</h4>
                 <ul>
-                    <li><b>File Not Found Error</b>: Ensure 'customer_churn_data.csv' is in the same directory as the script.</li>
+                    <li><b>File Not Found Error</b>: Ensure 'churn_data.csv' is in the same directory as the script.</li>
                     <li><b>Missing Columns</b>: Verify the dataset includes all expected columns (see Data Overview).</li>
                     <li><b>Prediction Errors</b>: Check input values in the Churn Prediction form to match dataset categories.</li>
                     <li><b>Need Further Help?</b>: Contact us via email, LinkedIn, or GitHub.</li>
@@ -894,7 +893,7 @@ if df is not None:
                 y='MonthlyCharges',
                 color='Churn',
                 title="Tenure vs Monthly Charges",
-                color_discrete_sequence=['#F4F5E', '#2DD4BF'],
+                color_discrete_sequence=['#F43F5E', '#2DD4BF'],
                 hover_data=['Contract'],
                 template='plotly_dark'
             )
@@ -1054,7 +1053,7 @@ if df is not None:
         # Categorical Features
         categorical_cols = [
             col for col in df.columns 
-            if col in EXPECTED_COLUMNS and col != 'customerID' and df[col].dtype == 'object'
+            if col in DATASET_COLUMNS and col != 'customerID' and df[col].dtype == 'object'
         ]
         st.markdown('<p class="sub-header">Categorical Features Analysis</p>', unsafe_allow_html=True)
         st.markdown('<div class="chart-card">', unsafe_allow_html=True)
@@ -1235,7 +1234,7 @@ if df is not None:
 
 else:
     st.markdown('<div class="metric-box">', unsafe_allow_html=True)
-    st.error("Error: Please ensure the dataset file 'customer_churn_data.csv' is available in the correct directory. Some features will be disabled.")
+    st.error("Error: Please ensure the dataset file 'churn_data.csv' is available in the correct directory. Some features will be disabled.")
     st.markdown('</div>', unsafe_allow_html=True)
     
     # Display limited Home page without data
@@ -1246,6 +1245,7 @@ else:
                 <p class="hero-text">
                     A comprehensive platform for analyzing customer behavior, identifying churn drivers, and predicting at-risk customers to inform strategic retention efforts.
                 </p>
+            </div>
         """, unsafe_allow_html=True)
 
         # View Documentation
@@ -1280,4 +1280,4 @@ else:
                 <p>Churn Analytics Dashboard v1.0.0</p>
                 <p>Powered by <a href="https://felido01.github.io/felixidowu01/intro.html" target="_blank">Felixidowu</a></p>
             </div>
-        ''', unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
