@@ -210,20 +210,36 @@ st.markdown("""
         width: 100px;
     }
     .collapsible-section {
-        margin-top: 20px;
-        padding: 10px;
+        margin-top: 10px;
+        padding: 15px;
         border-radius: 8px;
         background: #1E293B;
+        border: 1px solid #2DD4BF;
     }
     .collapsible-section h4 {
         font-size: 16px;
         color: #FFFFFF;
         margin-bottom: 10px;
+        border-bottom: 1px solid #2DD4BF;
+        padding-bottom: 5px;
     }
-    .collapsible-section p {
+    .collapsible-section p, .collapsible-section ul {
         font-size: 14px;
         color: #D1D5DB;
         margin: 0;
+        line-height: 1.5;
+    }
+    .collapsible-section ul {
+        list-style: none;
+        padding: 0;
+    }
+    .collapsible-section li {
+        margin: 10px 0;
+    }
+    .collapsible-section li::before {
+        content: '•';
+        color: #2DD4BF;
+        margin-right: 10px;
     }
     .about-dataset {
         background: #0F172A;
@@ -315,48 +331,6 @@ st.markdown("""
         color: #F43F5E;
         transform: scale(1.2);
     }
-    .accordion {
-        background: #1E293B;
-        color: #D1D5DB;
-        cursor: pointer;
-        padding: 12px;
-        width: 100%;
-        border: none;
-        text-align: left;
-        outline: none;
-        font-size: 14px;
-        transition: 0.3s;
-        margin-bottom: 5px;
-        border-radius: 8px;
-    }
-    .accordion:hover {
-        background: #2DD4BF;
-        color: #0F172A;
-    }
-    .accordion:after {
-        content: '\\25B6';
-        color: #2DD4BF;
-        font-weight: bold;
-        float: right;
-        margin-left: 5px;
-    }
-    .accordion.active:after {
-        content: "\\25BC";
-    }
-    .panel {
-        padding: 0 18px;
-        background: #1E293B;
-        max-height: 0;
-        overflow: hidden;
-        transition: max-height 0.2s ease-out;
-        border-radius: 8px;
-        margin-bottom: 10px;
-    }
-    .panel p, .panel ul {
-        font-size: 14px;
-        color: #D1D5DB;
-        margin: 10px 0;
-    }
     @keyframes fadeIn {
         from { opacity: 0; transform: translateY(10px); }
         to { opacity: 1; transform: translateY(0); }
@@ -382,6 +356,7 @@ st.markdown("""
         .contact-links a { font-size: 20px; }
         .mission-section h3 { font-size: 20px; }
         .preview-section h3 { font-size: 20px; }
+        .collapsible-section h4 { font-size: 14px; }
     }
     </style>
 """, unsafe_allow_html=True)
@@ -621,55 +596,36 @@ with st.sidebar.expander("Contact Us", expanded=True):
 # Help & Support
 with st.sidebar.expander("Help & Support", expanded=False):
     st.markdown("<h4>Help Center</h4>", unsafe_allow_html=True)
-    st.markdown("""
-        <button class="accordion">Using the Dashboard</button>
-        <div class="panel">
+    with st.container():
+        st.markdown("""
             <div class="collapsible-section">
-                <h4>Navigating the Dashboard</h4>
+                <h4>Using the Dashboard</h4>
                 <p>Use the sidebar to switch between pages (Home, Dashboard, Data Overview, EDA, Churn Prediction).</p>
                 <p>Apply quick filters to focus on specific customer segments, like high-risk customers or senior citizens.</p>
                 <p>Adjust model parameters to fine-tune predictions in the Churn Prediction section.</p>
             </div>
-        </div>
-
-        <button class="accordion">Dataset Requirements</button>
-        <div class="panel">
+        """, unsafe_allow_html=True)
+    with st.container():
+        st.markdown("""
             <div class="collapsible-section">
-                <h4>Dataset Specifications</h4>
+                <h4>Dataset Requirements</h4>
                 <p>Ensure the dataset ('customer_churn_data.csv') includes all required columns: customerID, gender, SeniorCitizen, etc.</p>
                 <p>Categorical columns should have consistent values (e.g., 'Yes'/'No' for Churn).</p>
                 <p>Numerical columns like tenure and MonthlyCharges should not contain invalid values.</p>
             </div>
-        </div>
-
-        <button class="accordion">Troubleshooting</button>
-        <div class="panel">
+        """, unsafe_allow_html=True)
+    with st.container():
+        st.markdown("""
             <div class="collapsible-section">
-                <h4>Common Issues & Solutions</h4>
-                <ul style="list-style: none; padding: 0;">
-                    <li style="margin: 10px 0;"><b>File Not Found Error</b>: Ensure 'customer_churn_data.csv' is in the same directory as the script.</li>
-                    <li style="margin: 10px 0;"><b>Missing Columns</b>: Verify the dataset includes all expected columns (see Data Overview).</li>
-                    <li style="margin: 10px 0;"><b>Prediction Errors</b>: Check input values in the Churn Prediction form to match dataset categories.</li>
-                    <li style="margin: 10px 0;"><b>Need Further Help?</b>: Contact us via email, LinkedIn, or GitHub.</li>
+                <h4>Troubleshooting</h4>
+                <ul>
+                    <li><b>File Not Found Error</b>: Ensure 'customer_churn_data.csv' is in the same directory as the script.</li>
+                    <li><b>Missing Columns</b>: Verify the dataset includes all expected columns (see Data Overview).</li>
+                    <li><b>Prediction Errors</b>: Check input values in the Churn Prediction form to match dataset categories.</li>
+                    <li><b>Need Further Help?</b>: Contact us via email, LinkedIn, or GitHub.</li>
                 </ul>
             </div>
-        </div>
-
-        <script>
-        var acc = document.getElementsByClassName("accordion");
-        for (var i = 0; i < acc.length; i++) {
-            acc[i].addEventListener("click", function() {
-                this.classList.toggle("active");
-                var panel = this.nextElementSibling;
-                if (panel.style.maxHeight) {
-                    panel.style.maxHeight = null;
-                } else {
-                    panel.style.maxHeight = panel.scrollHeight + "px";
-                }
-            });
-        }
-        </script>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
 
 # Sidebar Footer
 st.sidebar.markdown("""
