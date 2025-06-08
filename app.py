@@ -1246,7 +1246,5 @@ else:
             <div class="footer-section">
                 <p>Churn Analytics Dashboard v1.0.0</p>
                 <p>Powered by <a href="https://felido01.github.io/felixidowu01/intro.html" target="_blank">Felixidowu</a> 
-                   # <a href="mailto:felixidowu.01@gmail.com" target="_blank">Contact Support</a> | 
-                   # <a href="https://felido01.github.io/felixidowu01/intro.html" target="_blank">Learn More</a></p>
             </div>
         """, unsafe_allow_html=True)
