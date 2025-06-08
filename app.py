@@ -162,7 +162,7 @@ st.markdown("""
         background: linear-gradient(180deg, #0F172A, #1E293B);
         padding: 20px;
         border-radius: 10px;
-        box-shadow: 0 4px-12px rgba(0,0,0,0.3);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
     }
     .sidebar-header {
         font-size: 24px;
@@ -298,7 +298,7 @@ st.markdown("""
         padding: 15px;
         border-radius: 12px;
         box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-        margin Installing dependencies from Pipfile.lock (4a0b1c)… margin: 10px 0;
+        margin: 10px 0;
     }
     .contact-links {
         display: flex;
@@ -314,6 +314,48 @@ st.markdown("""
     .contact-links a:hover {
         color: #F43F5E;
         transform: scale(1.2);
+    }
+    .accordion {
+        background: #1E293B;
+        color: #D1D5DB;
+        cursor: pointer;
+        padding: 12px;
+        width: 100%;
+        border: none;
+        text-align: left;
+        outline: none;
+        font-size: 14px;
+        transition: 0.3s;
+        margin-bottom: 5px;
+        border-radius: 8px;
+    }
+    .accordion:hover {
+        background: #2DD4BF;
+        color: #0F172A;
+    }
+    .accordion:after {
+        content: '\\25B6';
+        color: #2DD4BF;
+        font-weight: bold;
+        float: right;
+        margin-left: 5px;
+    }
+    .accordion.active:after {
+        content: "\\25BC";
+    }
+    .panel {
+        padding: 0 18px;
+        background: #1E293B;
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.2s ease-out;
+        border-radius: 8px;
+        margin-bottom: 10px;
+    }
+    .panel p, .panel ul {
+        font-size: 14px;
+        color: #D1D5DB;
+        margin: 10px 0;
     }
     @keyframes fadeIn {
         from { opacity: 0; transform: translateY(10px); }
@@ -554,7 +596,7 @@ with st.sidebar.expander("Download Reports", expanded=False):
             key="download_data"
         )
         
-        # Generate report based on current data and model
+        # Generate report based on current data
         report_data = generate_analysis_report(st.session_state.df)
         st.download_button(
             label="Download Analysis Report",
@@ -579,26 +621,29 @@ with st.sidebar.expander("Contact Us", expanded=True):
 # Help & Support
 with st.sidebar.expander("Help & Support", expanded=False):
     st.markdown("<h4>Help Center</h4>", unsafe_allow_html=True)
-    with st.expander("Using the Dashboard", expanded=False):
-        st.markdown("""
+    st.markdown("""
+        <button class="accordion">Using the Dashboard</button>
+        <div class="panel">
             <div class="collapsible-section">
                 <h4>Navigating the Dashboard</h4>
                 <p>Use the sidebar to switch between pages (Home, Dashboard, Data Overview, EDA, Churn Prediction).</p>
                 <p>Apply quick filters to focus on specific customer segments, like high-risk customers or senior citizens.</p>
                 <p>Adjust model parameters to fine-tune predictions in the Churn Prediction section.</p>
             </div>
-        """, unsafe_allow_html=True)
-    with st.expander("Dataset Requirements", expanded=False):
-        st.markdown("""
+        </div>
+
+        <button class="accordion">Dataset Requirements</button>
+        <div class="panel">
             <div class="collapsible-section">
                 <h4>Dataset Specifications</h4>
                 <p>Ensure the dataset ('customer_churn_data.csv') includes all required columns: customerID, gender, SeniorCitizen, etc.</p>
                 <p>Categorical columns should have consistent values (e.g., 'Yes'/'No' for Churn).</p>
                 <p>Numerical columns like tenure and MonthlyCharges should not contain invalid values.</p>
             </div>
-        """, unsafe_allow_html=True)
-    with st.expander("Troubleshooting", expanded=False):
-        st.markdown("""
+        </div>
+
+        <button class="accordion">Troubleshooting</button>
+        <div class="panel">
             <div class="collapsible-section">
                 <h4>Common Issues & Solutions</h4>
                 <ul style="list-style: none; padding: 0;">
@@ -608,7 +653,23 @@ with st.sidebar.expander("Help & Support", expanded=False):
                     <li style="margin: 10px 0;"><b>Need Further Help?</b>: Contact us via email, LinkedIn, or GitHub.</li>
                 </ul>
             </div>
-        """, unsafe_allow_html=True)
+        </div>
+
+        <script>
+        var acc = document.getElementsByClassName("accordion");
+        for (var i = 0; i < acc.length; i++) {
+            acc[i].addEventListener("click", function() {
+                this.classList.toggle("active");
+                var panel = this.nextElementSibling;
+                if (panel.style.maxHeight) {
+                    panel.style.maxHeight = null;
+                } else {
+                    panel.style.maxHeight = panel.scrollHeight + "px";
+                }
+            });
+        }
+        </script>
+    """, unsafe_allow_html=True)
 
 # Sidebar Footer
 st.sidebar.markdown("""
