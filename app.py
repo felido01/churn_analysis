@@ -48,7 +48,7 @@ st.markdown("""
         transition: transform 0.3s ease, box-shadow 0.3s ease;
         margin: 10px 0;
         animation: fadeIn 0.5s ease-in;
-        min-height: 120px; /* Ensure consistent height */
+        min-height: 120px;
         display: flex;
         flex-direction: column;
         justify-content: center;
@@ -69,7 +69,7 @@ st.markdown("""
         color: #D1D5DB;
         margin: 5px 0 0;
     }
-    .stButton>button { /* Updated button styles for consistency */
+    .stButton>button {
         background: #F3F4F6; 
         color: #0F172A; 
         border-radius: 8px; 
@@ -78,7 +78,7 @@ st.markdown("""
         font-weight: 500;
         border: 1px solid #2DD4BF;
         transition: background 0.3s ease, transform 0.3s ease;
-        width: 100%; /* Ensure buttons take full width of their container */
+        width: 100%;
     }
     .stButton>button:hover { 
         background: #2DD4BF; 
@@ -738,7 +738,7 @@ if df is not None:
 
         # Call to Action
         st.markdown('<p class="sub-header">Get Started</p>', unsafe_allow_html=True)
-        col1, col2 = st.columns(2)  # Create two columns for buttons
+        col1, col2 = st.columns(2)
         with col1:
             if st.button("Explore the Dashboard", key="explore_dashboard"):
                 st.session_state.page = "Dashboard"
@@ -746,7 +746,7 @@ if df is not None:
         with col2:
             st.markdown(
                 """
-                <a href="https://felido01.github.io/felixidowu01/intro.html" target="_blank">
+                <a href="https://github.com/felido01/churn_analysis" target="_blank">
                     <button style="background: #F3F4F6; color: #0F172A; border-radius: 8px; padding: 12px 24px; font-size: 16px; font-weight: 500; border: 1px solid #2DD4BF; transition: background 0.3s ease, transform 0.3s ease; width: 100%;">
                         View Documentation
                     </button>
@@ -1246,7 +1246,7 @@ else:
         """, unsafe_allow_html=True)
 
         st.markdown('<p class="sub-header">Get Started</p>', unsafe_allow_html=True)
-        col1, col2 = st.columns(2)  # Create two columns for buttons
+        col1, col2 = st.columns(2)
         with col1:
             if st.button("Explore the Dashboard", key="explore_dashboard"):
                 st.session_state.page = "Dashboard"
@@ -1254,7 +1254,7 @@ else:
         with col2:
             st.markdown(
                 """
-                <a href="https://felido01.github.io/felixidowu01/intro.html" target="_blank">
+                <a href="https://github.com/felido01/churn_analysis" target="_blank">
                     <button style="background: #F3F4F6; color: #0F172A; border-radius: 8px; padding: 12px 24px; font-size: 16px; font-weight: 500; border: 1px solid #2DD4BF; transition: background 0.3s ease, transform 0.3s ease; width: 100%;">
                         View Documentation
                     </button>
