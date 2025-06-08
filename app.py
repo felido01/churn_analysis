@@ -748,9 +748,7 @@ if df is not None:
         st.markdown("""
             <div class="footer-section">
                 <p>Churn Analytics Dashboard v1.0.0</p>
-                <p>Powered by <a href="https://felido01.github.io/felixidowu01/intro.html" target="_blank">Felixidowu</a> | 
-                   <a href="mailto:felixidowu.01@gmail.com" target="_blank">Contact Support</a> | 
-                   <a href="https://felido01.github.io/felixidowu01/intro.html" target="_blank">Learn More</a></p>
+                <p>Powered by <a href="https://felido01.github.io/felixidowu01/intro.html" target="_blank">Felixidowu</a></p>
             </div>
         """, unsafe_allow_html=True)
 
@@ -880,11 +878,11 @@ if df is not None:
             st.markdown('<div class="chart-card">', unsafe_allow_html=True)
             fig3 = px.histogram(
                 filtered_df,
-                x='Churn',
-                color='Contract',
+                x='Contract',
+                color='Churn',
                 barmode='group',
                 title="Contract Type vs Churn",
-                color_discrete_sequence=['#F43F5E', '#2FD4BF'],
+                color_discrete_sequence=['#F43F5E', '#2DD4BF'],
                 template='plotly_dark'
             )
             fig3.update_layout(title_x=0.5, margin=dict(t=50, b=20))
@@ -920,31 +918,31 @@ if df is not None:
         - **customerID**: Unique identifier for each customer.
         - **gender**: Gender of the customer (Male, Female).
         - **SeniorCitizen**: Whether the customer is a senior citizen (1: Yes, 0: No).
-        - **Partner**: Whether the customer has a partner (Yes or No).
-        - **Dependents**: Whether the customer has dependents (Yes or No).
+        - **Partner**: Whether the customer has a partner (Yes, No).
+        - **Dependents**: Whether the customer has dependents (Yes, No).
         - **tenure**: Number of months the customer has stayed with the company.
-        - **PhoneService**: Whether the customer has phone service (Yes or No).
-        - **MultipleLines**: Whether the customer has multiple lines (Yes or No, No phone service).
-        - **InternetService**: Customer’s internet service provider (DSL or Fiber optic, No).
-        - **OnlineSecurity**, **OnlineBackup**, **DeviceProtection**, **TechSupport**, **StreamingTV**, **StreamingMovies**: Additional services (Yes or No, No internet service).
-        - **Contract**: Contract term (Month-to-Month or One year, Two year).
-        - **PaperlessBilling**: Whether the customer uses paperless billing (Yes or No).
-        - **PaymentMethod**: Payment method (Electronic check or Mailed check, Bank transfer or Credit card).
+        - **PhoneService**: Whether the customer has phone service (Yes, No).
+        - **MultipleLines**: Whether the customer has multiple lines (Yes, No, No phone service).
+        - **InternetService**: Customer’s internet service provider (DSL, Fiber optic, No).
+        - **OnlineSecurity, OnlineBackup, DeviceProtection, TechSupport, StreamingTV, StreamingMovies**: Additional services (Yes, No, No internet service).
+        - **Contract**: Contract term (Month-to-month, One year, Two year).
+        - **PaperlessBilling**: Whether the customer uses paperless billing (Yes, No).
+        - **PaymentMethod**: Payment method (Electronic check, Mailed check, Bank transfer, Credit card).
         - **MonthlyCharges**: Monthly charges incurred by the customer.
         - **TotalCharges**: Total charges incurred by the customer.
-    .    - **Churn**: Whether the customer has churned (Yes or No).
+        - **Churn**: Whether the customer churned (Yes, No).
         """)
         st.markdown('</div>', unsafe_allow_html=True)
 
-        st.markdown('<div class="chart-card-box">', unsafe_allow_html=True)
+        st.markdown('<div class="chart-card">', unsafe_allow_html=True)
         st.write("### Basic Statistics")
         st.dataframe(filtered_df.describe(include='all'), use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
-        st.markdown('<div class="chart-box">', unsafe_allow_html=True)
+        st.markdown('<div class="chart-card">', unsafe_allow_html=True)
         st.write("### Missing Values")
-        missing_values = filtered_df.isnull().sum()
-        st.write(missing_values[missing_values > 0] if missing_values.sum() > 0 else "No missing values.")
+        missing = filtered_df.isnull().sum()
+        st.write(missing[missing > 0] if missing.sum() > 0 else "No missing values.")
         st.markdown('</div>', unsafe_allow_html=True)
 
     # Exploratory Data Analysis
@@ -1245,6 +1243,6 @@ else:
         st.markdown("""
             <div class="footer-section">
                 <p>Churn Analytics Dashboard v1.0.0</p>
-                <p>Powered by <a href="https://felido01.github.io/felixidowu01/intro.html" target="_blank">Felixidowu</a> 
+                <p>Powered by <a href="https://felido01.github.io/felixidowu01/intro.html" target="_blank">Felixidowu</a></p>
             </div>
         """, unsafe_allow_html=True)
