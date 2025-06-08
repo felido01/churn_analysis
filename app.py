@@ -48,17 +48,28 @@ st.markdown("""
         transition: transform 0.3s ease, box-shadow 0.3s ease;
         margin: 10px 0;
         animation: fadeIn 0.5s ease-in;
+        min-height: 120px; /* Ensure consistent height */
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        border-left: 4px solid #2DD4BF;
     }
     .metric-box:hover { 
         transform: translateY(-5px);
         box-shadow: 0 8px 20px rgba(0,0,0,0.4);
     }
     .metric-box.churn { border-left: 4px solid #F43F5E; }
-    .metric-box.customers { border-left: 4px solid #2DD4BF; }
-    .metric-box.tenure { border-left: 4px solid #2DD4BF; }
-    .metric-box.charges { border-left: 4px solid #2DD4BF; }
-    .metric-box.senior { border-left: 4px solid #2DD4BF; }
-    .stButton>button { 
+    .metric-box h3 {
+        font-size: 24px;
+        color: #FFFFFF;
+        margin: 0;
+    }
+    .metric-box p {
+        font-size: 16px;
+        color: #D1D5DB;
+        margin: 5px 0 0;
+    }
+    .stButton>button { /* Updated button styles for consistency */
         background: #F3F4F6; 
         color: #0F172A; 
         border-radius: 8px; 
@@ -67,6 +78,7 @@ st.markdown("""
         font-weight: 500;
         border: 1px solid #2DD4BF;
         transition: background 0.3s ease, transform 0.3s ease;
+        width: 100%; /* Ensure buttons take full width of their container */
     }
     .stButton>button:hover { 
         background: #2DD4BF; 
@@ -347,7 +359,8 @@ st.markdown("""
         .main-header { font-size: 32px; }
         .hero-text { font-size: 18px; }
         .sub-header { font-size: 24px; }
-        .metric-box h3 { font-size: 24px; }
+        .metric-box h3 { font-size: 20px; }
+        .metric-box p { font-size: 14px; }
         .sidebar-header { font-size: 20px; }
         .sidebar-nav-item { font-size: 14px; }
         .about-dataset h3 { font-size: 20px; }
@@ -693,21 +706,21 @@ if df is not None:
             """, unsafe_allow_html=True)
         with col2:
             st.markdown(f"""
-                <div class="metric-box customers">
+                <div class="metric-box">
                     <h3>{total_customers:,}</h3>
                     <p>Total Customers</p>
                 </div>
             """, unsafe_allow_html=True)
         with col3:
             st.markdown(f"""
-                <div class="metric-box tenure">
+                <div class="metric-box">
                     <h3>{avg_tenure:.1f}</h3>
                     <p>Average Tenure (Months)</p>
                 </div>
             """, unsafe_allow_html=True)
         with col4:
             st.markdown(f"""
-                <div class="metric-box charges">
+                <div class="metric-box">
                     <h3>${avg_monthly:.2f}</h3>
                     <p>Average Monthly Charges</p>
                 </div>
@@ -725,9 +738,22 @@ if df is not None:
 
         # Call to Action
         st.markdown('<p class="sub-header">Get Started</p>', unsafe_allow_html=True)
-        if st.button("Explore the Dashboard", key="explore_dashboard"):
-            st.session_state.page = "Dashboard"
-            st.rerun()
+        col1, col2 = st.columns(2)  # Create two columns for buttons
+        with col1:
+            if st.button("Explore the Dashboard", key="explore_dashboard"):
+                st.session_state.page = "Dashboard"
+                st.rerun()
+        with col2:
+            st.markdown(
+                """
+                <a href="https://felido01.github.io/felixidowu01/intro.html" target="_blank">
+                    <button style="background: #F3F4F6; color: #0F172A; border-radius: 8px; padding: 12px 24px; font-size: 16px; font-weight: 500; border: 1px solid #2DD4BF; transition: background 0.3s ease, transform 0.3s ease; width: 100%;">
+                        View Documentation
+                    </button>
+                </a>
+                """, 
+                unsafe_allow_html=True
+            )
 
         # About Dataset Section
         st.markdown('<p class="sub-header">About the Dataset</p>', unsafe_allow_html=True)
@@ -812,28 +838,28 @@ if df is not None:
             """, unsafe_allow_html=True)
         with col2:
             st.markdown(f"""
-                <div class="metric-box customers">
+                <div class="metric-box">
                     <h3>{total_customers:,}</h3>
                     <p>Total Customers</p>
                 </div>
             """, unsafe_allow_html=True)
         with col3:
             st.markdown(f"""
-                <div class="metric-box tenure">
+                <div class="metric-box">
                     <h3>{avg_tenure:.1f}</h3>
                     <p>Average Tenure (Months)</p>
                 </div>
             """, unsafe_allow_html=True)
         with col4:
             st.markdown(f"""
-                <div class="metric-box charges">
+                <div class="metric-box">
                     <h3>${avg_monthly:.2f}</h3>
                     <p>Average Monthly Charges</p>
                 </div>
             """, unsafe_allow_html=True)
         with col5:
             st.markdown(f"""
-                <div class="metric-box senior">
+                <div class="metric-box">
                     <h3>{senior_pct:.1f}%</h3>
                     <p>Senior Citizens</p>
                 </div>
@@ -1220,9 +1246,22 @@ else:
         """, unsafe_allow_html=True)
 
         st.markdown('<p class="sub-header">Get Started</p>', unsafe_allow_html=True)
-        if st.button("Explore the Dashboard", key="explore_dashboard"):
-            st.session_state.page = "Dashboard"
-            st.rerun()
+        col1, col2 = st.columns(2)  # Create two columns for buttons
+        with col1:
+            if st.button("Explore the Dashboard", key="explore_dashboard"):
+                st.session_state.page = "Dashboard"
+                st.rerun()
+        with col2:
+            st.markdown(
+                """
+                <a href="https://felido01.github.io/felixidowu01/intro.html" target="_blank">
+                    <button style="background: #F3F4F6; color: #0F172A; border-radius: 8px; padding: 12px 24px; font-size: 16px; font-weight: 500; border: 1px solid #2DD4BF; transition: background 0.3s ease, transform 0.3s ease; width: 100%;">
+                        View Documentation
+                    </button>
+                </a>
+                """, 
+                unsafe_allow_html=True
+            )
 
         st.markdown('<p class="sub-header">About the Dataset</p>', unsafe_allow_html=True)
         st.markdown("""
