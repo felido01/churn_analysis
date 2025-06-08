@@ -67,6 +67,8 @@ st.markdown("""
         font-weight: 500;
         border: 1px solid #2DD4BF;
         transition: background 0.3s ease, transform 0.3s ease;
+        display: block;
+        margin: 10px auto;
     }
     .stButton>button:hover { 
         background: #2DD4BF; 
@@ -74,9 +76,9 @@ st.markdown("""
         transform: scale(1.05);
     }
     .custom-button {
-        display: inline-block;
-        background: #F3F4F6;
-        color: #0F172A;
+        display: block;
+        background: #0F172A;
+        color: #FFFFFF;
         border-radius: 8px;
         padding: 12px 24px;
         font-size: 16px;
@@ -84,11 +86,13 @@ st.markdown("""
         border: 1px solid #2DD4BF;
         text-decoration: none;
         transition: background 0.3s ease, transform 0.3s ease;
-        margin: 10px;
+        text-align: center;
+        margin: 20px auto;
+        width: 200px;
     }
     .custom-button:hover {
         background: #2DD4BF;
-        color: #FFFFFF;
+        color: #0F172A;
         transform: scale(1.05);
     }
     .stSelectbox div[data-baseweb="select"]>div {
@@ -375,6 +379,7 @@ st.markdown("""
         .mission-section h3 { font-size: 20px; }
         .preview-section h3 { font-size: 20px; }
         .collapsible-section h4 { font-size: 14px; }
+        .custom-button { width: 180px; }
     }
     </style>
 """, unsafe_allow_html=True)
@@ -438,8 +443,7 @@ def preprocess_data(df):
 # Train model
 def train_model(X, y, model_type='RandomForest', n_estimators=100, max_depth=None):
     try:
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_stateोन=1
-        )
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
         if model_type == 'RandomForest':
             model = RandomForestClassifier(n_estimators=n_estimators, max_depth=max_depth, random_state=42, n_jobs=-1)
         else:
@@ -522,7 +526,7 @@ if 'quick_filter' not in st.session_state:
 # Sidebar Navigation
 st.sidebar.markdown("""
     <div>
-        <img src="https://img.icons8.com/color/100/000000/bar-chart.png" class="sidebar-logo">
+        <img src="https://img.icons8.com/plasticine/100/000000/pie-chart.png" class="sidebar-logo">
         <h2 class="sidebar-header">Churn Analytics</h2>
         <p class="sidebar-subtext">Analyze customer behavior and predict churn.</p>
     </div>
@@ -682,6 +686,12 @@ if df is not None:
             </div>
         """, unsafe_allow_html=True)
 
+        # View Documentation
+        st.markdown('<p class="sub-header">Project Documentation</p>', unsafe_allow_html=True)
+        st.markdown("""
+            <a href="https://github.com/felido01/churn_analysis" target="_blank" class="custom-button">View Documentation</a>
+        """, unsafe_allow_html=True)
+
         # Mission Statement
         st.markdown('<p class="sub-header">Our Mission</p>', unsafe_allow_html=True)
         st.markdown("""
@@ -744,15 +754,9 @@ if df is not None:
 
         # Call to Action
         st.markdown('<p class="sub-header">Get Started</p>', unsafe_allow_html=True)
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("Explore the Dashboard", key="explore_dashboard"):
-                st.session_state.page = "Dashboard"
-                st.rerun()
-        with col2:
-            st.markdown("""
-                <a href="https://github.com/felido01/churn_analysis" target="_blank" class="custom-button">View Documentation</a>
-            """, unsafe_allow_html=True)
+        if st.button("Explore the Dashboard", key="explore_dashboard"):
+            st.session_state.page = "Dashboard"
+            st.rerun()
 
         # About Dataset Section
         st.markdown('<p class="sub-header">About the Dataset</p>', unsafe_allow_html=True)
@@ -788,7 +792,7 @@ if df is not None:
         """, unsafe_allow_html=True)
         
         # Filters
-        st.markdown('<div class="filter-container"><h4>Filter Data</h4></div>', unsafe_allow_html=True)
+        st.markdown('<div class="filter-container"><h4>Filter Customers</h4></div>', unsafe_allow_html=True)
         with st.container():
             col1, col2, col3 = st.columns(3)
             with col1:
@@ -811,7 +815,7 @@ if df is not None:
                     int(df['tenure'].min()),
                     int(df['tenure'].max()),
                     (int(df['tenure'].min()), int(df['tenure'].max())),
-                    key="dash_tenure"
+                    key="tenure_range"
                 )
             filtered_df = filtered_df[
                 (filtered_df['gender'].isin(selected_gender)) &
@@ -1217,21 +1221,21 @@ if df is not None:
                                         if input_data[col].iloc[0] in le_dict[col].classes_:
                                             input_data[col] = le_dict[col].transform([input_data[col].iloc[0]])[0]
                                         else:
-                                            st.error(f"Value '{input_data[col].iloc[0]}' in {col} is not recognized. Please select a valid option.")
+                                            st.error(f"Error: Value '{col}' in input_data['{col}'] is not recognized. Please select a valid option.")
                                             st.stop()
                                 prediction = model.predict(input_data)
                                 prob = model.predict_proba(input_data)[0]
                                 st.markdown('<div class="metric-box">', unsafe_allow_html=True)
-                                st.write(f"**Prediction**: {'Churn' if prediction[0] == 1 else 'No Churn'}")
-                                st.write(f"**Churn Probability**: {prob[1]:.2%}")
+                                st.write(f"Prediction: {prediction[0]: 'Churn' if prediction[0] == 1 else 'No Churn'}")
+                                st.write(f"Probability of Churn: {prob[1]:.2%}")
                                 st.markdown('</div>', unsafe_allow_html=True)
                             except Exception as e:
                                 st.error(f"Prediction error: {e}. Please check input data.")
-                st.markdown('</div>', unsafe_allow_html=True)
+                st.markdown('</div>', unsafe_html=True)
 else:
-    st.markdown('<div class="metric-box">', unsafe_allow_html=True)
-    st.error("Error: Please ensure the dataset file 'customer_churn_data.csv' is available in the correct directory. Some features will be disabled.")
-    st.markdown('</div>', unsafe_allow_html=True)
+                st.markdown('<div class="metric-box">', unsafe_allow_html=True)
+                st.error("Error: Please ensure the dataset file 'customer_churn_data.csv' is available in the correct directory. Some features will be disabled.")
+                st.markdown('</div>', unsafe_allow_html=True)
     
     # Display limited Home page without data
     if st.session_state.page == "Home":
@@ -1239,21 +1243,22 @@ else:
             <div class="hero-section">
                 <h1 class="main-header">Customer Churn Analysis Dashboard</h1>
                 <p class="hero-text">
-                    A comprehensive platform for analyzing customer behavior, identifying churn drivers, and predicting at-risk customers to inform strategic retention efforts.
+                    A comprehensive platform for analyzing customer behavior, identifying at-risk customers 
+                    and churn drivers, and predicting to inform strategic retention efforts.
                 </p>
             </div>
         """, unsafe_allow_html=True)
 
+        # View Documentation
+        st.markdown('<p class="sub-header">Project Documentation</p>', unsafe_allow_html=True)
+        st.markdown("""
+            <a href="https://github.com/felido01/churn_analysis" target="_blank" class="custom-button">View Documentation</a>
+        """, unsafe_allow_html=True)
+
         st.markdown('<p class="sub-header">Get Started</p>', unsafe_allow_html=True)
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("Explore the Dashboard", key="explore_dashboard"):
-                st.session_state.page = "Dashboard"
-                st.rerun()
-        with col2:
-            st.markdown("""
-                <a href="https://github.com/felido01/churn_analysis" target="_blank" class="custom-button">View Documentation</a>
-            """, unsafe_allow_html=True)
+        if st.button("Explore the Dashboard", key="explore_button"):
+            st.session_state.page = "Dashboard"
+            st.rerun()
 
         st.markdown('<p class="sub-header">About the Dataset</p>', unsafe_allow_html=True)
         st.markdown("""
@@ -1263,7 +1268,7 @@ else:
                 <ul>
                     <li>Customer Demographics: Gender, Senior Citizen status, Partner, Dependents.</li>
                     <li>Service Subscriptions: Phone, Internet, Online Security, Streaming, and more.</li>
-                    <li>Billing Information: Contract types, Payment methods, Monthly and Total Charges.</li>
+                    <li>Billing Information: Contract types, payment methods, Monthly and Total Charges.</li>
                     <li>Churn Status: Indicates whether a customer has churned (Yes/No).</li>
                 </ul>
                 <p><b>Note:</b> Please upload the dataset to enable full functionality.</p>
