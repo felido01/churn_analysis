@@ -42,48 +42,76 @@ st.markdown("""
     .metric-box { 
         background: #0F172A;
         padding: 20px; 
-        border-radius: 12px; 
+        border-radius: 12px;
         text-align: center; 
         box-shadow: 0 4px 12px rgba(0,0,0,0.3);
         transition: transform 0.3s ease, box-shadow 0.3s ease;
         margin: 10px 0;
-        animation: fadeIn 0.5s ease-in;
+        animation: fadeIn 0.5s ease-in-out;
         min-height: 120px;
         display: flex;
         flex-direction: column;
         justify-content: center;
+        align-items: center;
         border-left: 4px solid #2DD4BF;
     }
     .metric-box:hover { 
         transform: translateY(-5px);
-        box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+        box-shadow: 0 8px 16px rgba(0,0,0,0.4);
     }
-    .metric-box.churn { border-left: 4px solid #F43F5E; }
+    .metric-box.churn { 
+        border-left: 4px solid #F43F5E; 
+    }
     .metric-box h3 {
         font-size: 24px;
         color: #FFFFFF;
         margin: 0;
+        font-weight: 600;
     }
     .metric-box p {
         font-size: 16px;
         color: #D1D5DB;
         margin: 5px 0 0;
+        font-weight: normal;
     }
     .stButton>button {
-        background: #F3F4F6; 
-        color: #0F172A; 
-        border-radius: 8px; 
-        padding: 12px 24px; 
+        background: #F3F4F6;
+        color: #0F172A;
+        border-radius: 8px;
+        padding: 12px 24px;
         font-size: 16px;
         font-weight: 500;
         border: 1px solid #2DD4BF;
-        transition: background 0.3s ease, transform 0.3s ease;
+        transition: all 0.3s ease;
         width: 100%;
+        box-sizing: border-box;
     }
-    .stButton>button:hover { 
-        background: #2DD4BF; 
+    .stButton>button:hover {
+        background: #2DD4BF;
         color: #FFFFFF;
         transform: scale(1.05);
+        cursor: pointer;
+    }
+    .custom-button {
+        background: #F3F4F6;
+        color: #0F172A;
+        border-radius: 8px;
+        padding: 12px 24px;
+        font-size: 16px;
+        font-weight: 500;
+        border: 1px solid #2DD4BF;
+        transition: all 0.3s ease;
+        width: 100%;
+        box-sizing: border-box;
+        text-align: center;
+        display: inline-block;
+        text-decoration: none;
+    }
+    .custom-button:hover {
+        background: #2DD4BF;
+        color: #FFFFFF;
+        transform: scale(1.05);
+        cursor: pointer;
     }
     .stSelectbox div[data-baseweb="select"]>div {
         background: #F3F4F6;
@@ -134,7 +162,6 @@ st.markdown("""
         font-size: 16px;
         color: #D1D5DB;
         line-height: 1.6;
-        margin-bottom: 15px;
     }
     .preview-section {
         background: #1E293B;
@@ -270,7 +297,6 @@ st.markdown("""
         font-size: 16px;
         color: #D1D5DB;
         line-height: 1.6;
-        margin-bottom: 15px;
     }
     .about-dataset ul {
         list-style: none;
@@ -306,7 +332,6 @@ st.markdown("""
         font-size: 16px;
         color: #D1D5DB;
         line-height: 1.6;
-        margin-bottom: 15px;
     }
     .filter-container {
         background: #1E293B;
@@ -370,6 +395,10 @@ st.markdown("""
         .mission-section h3 { font-size: 20px; }
         .preview-section h3 { font-size: 20px; }
         .collapsible-section h4 { font-size: 14px; }
+        .stButton>button, .custom-button {
+            padding: 10px 20px;
+            font-size: 14px;
+        }
     }
     </style>
 """, unsafe_allow_html=True)
@@ -584,7 +613,6 @@ with st.sidebar.expander("Download Reports", expanded=False):
             key="download_data"
         )
         
-        # Generate report based on current data
         report_data = generate_analysis_report(st.session_state.df)
         st.download_button(
             label="Download Analysis Report",
@@ -691,7 +719,7 @@ if df is not None:
 
         # Key Metrics Section
         st.markdown('<p class="sub-header">Key Metrics</p>', unsafe_allow_html=True)
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3, col4 = st.columns(4, gap="medium")
         churn_rate = filtered_df['Churn'].value_counts(normalize=True).get('Yes', 0) * 100
         total_customers = len(filtered_df)
         avg_tenure = filtered_df['tenure'].mean()
@@ -738,7 +766,7 @@ if df is not None:
 
         # Call to Action
         st.markdown('<p class="sub-header">Get Started</p>', unsafe_allow_html=True)
-        col1, col2 = st.columns(2)
+        col1, col2 = st.columns(2, gap="medium")
         with col1:
             if st.button("Explore the Dashboard", key="explore_dashboard"):
                 st.session_state.page = "Dashboard"
@@ -746,10 +774,8 @@ if df is not None:
         with col2:
             st.markdown(
                 """
-                <a href="https://github.com/felido01/churn_analysis" target="_blank">
-                    <button style="background: #F3F4F6; color: #0F172A; border-radius: 8px; padding: 12px 24px; font-size: 16px; font-weight: 500; border: 1px solid #2DD4BF; transition: background 0.3s ease, transform 0.3s ease; width: 100%;">
-                        View Documentation
-                    </button>
+                <a href="https://github.com/felido01/churn_analysis" target="_blank" class="custom-button">
+                    View Documentation
                 </a>
                 """, 
                 unsafe_allow_html=True
@@ -822,7 +848,7 @@ if df is not None:
         
         # Key Metrics
         st.markdown('<p class="sub-header">Key Metrics</p>', unsafe_allow_html=True)
-        col1, col2, col3, col4, col5 = st.columns(5)
+        col1, col2, col3, col4, col5 = st.columns(5, gap="medium")
         churn_rate = filtered_df['Churn'].value_counts(normalize=True).get('Yes', 0) * 100
         total_customers = len(filtered_df)
         avg_tenure = filtered_df['tenure'].mean()
@@ -870,7 +896,6 @@ if df is not None:
         col1, col2 = st.columns(2)
         
         with col1:
-            # Churn Distribution
             st.markdown('<div class="chart-card">', unsafe_allow_html=True)
             fig1 = px.pie(
                 filtered_df,
@@ -883,7 +908,6 @@ if df is not None:
             st.plotly_chart(fig1, use_container_width=True)
             st.markdown('</div>', unsafe_allow_html=True)
             
-            # Tenure vs Monthly Charges
             st.markdown('<div class="chart-card">', unsafe_allow_html=True)
             fig2 = px.scatter(
                 filtered_df,
@@ -900,7 +924,6 @@ if df is not None:
             st.markdown('</div>', unsafe_allow_html=True)
         
         with col2:
-            # Contract Type vs Churn
             st.markdown('<div class="chart-card">', unsafe_allow_html=True)
             fig3 = px.histogram(
                 filtered_df,
@@ -915,7 +938,6 @@ if df is not None:
             st.plotly_chart(fig3, use_container_width=True)
             st.markdown('</div>', unsafe_allow_html=True)
             
-            # Internet Service vs Churn
             st.markdown('<div class="chart-card">', unsafe_allow_html=True)
             fig4 = px.histogram(
                 filtered_df,
@@ -975,7 +997,6 @@ if df is not None:
     elif st.session_state.page == "EDA":
         st.markdown('<p class="main-header">Exploratory Data Analysis</p>', unsafe_allow_html=True)
         
-        # Data Filtering
         st.markdown('<div class="filter-container"><h4>Filter Data</h4></div>', unsafe_allow_html=True)
         with st.container():
             col1, col2, col3 = st.columns(3)
@@ -1011,7 +1032,6 @@ if df is not None:
         st.write(f"Filtered dataset size: {filtered_df.shape[0]:,} rows")
         st.markdown('</div>', unsafe_allow_html=True)
 
-        # Churn Distribution
         st.markdown('<p class="sub-header">Churn Distribution</p>', unsafe_allow_html=True)
         st.markdown('<div class="chart-card">', unsafe_allow_html=True)
         fig = px.histogram(
@@ -1026,7 +1046,6 @@ if df is not None:
         st.plotly_chart(fig, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
-        # Numerical Features
         numerical_cols = ['tenure', 'MonthlyCharges', 'TotalCharges']
         st.markdown('<p class="sub-header">Numerical Features Analysis</p>', unsafe_allow_html=True)
         st.markdown('<div class="chart-card">', unsafe_allow_html=True)
@@ -1048,7 +1067,6 @@ if df is not None:
         st.plotly_chart(fig, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
-        # Categorical Features
         categorical_cols = [
             col for col in df.columns 
             if col in EXPECTED_COLUMNS and col != 'customerID' and df[col].dtype == 'object'
@@ -1073,7 +1091,6 @@ if df is not None:
         st.plotly_chart(fig, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
-        # Correlation Matrix
         st.markdown('<p class="sub-header">Correlation Matrix (Numerical Features)</p>', unsafe_allow_html=True)
         st.markdown('<div class="chart-card">', unsafe_allow_html=True)
         numeric_df = filtered_df[numerical_cols].copy()
@@ -1098,16 +1115,13 @@ if df is not None:
     elif st.session_state.page == "Churn Prediction":
         st.markdown('<p class="main-header">Churn Prediction Model</p>', unsafe_allow_html=True)
         
-        # Preprocess data
         with st.spinner("Preprocessing data..."):
             df_clean, le_dict = preprocess_data(df)
         
         if df_clean is not None:
-            # Features and target
             X = df_clean.drop(['customerID', 'Churn'], axis=1)
             y = df_clean['Churn']
             
-            # Model selection
             st.markdown('<div class="filter-container">', unsafe_allow_html=True)
             model_type = st.selectbox(
                 "Select Model",
@@ -1118,7 +1132,6 @@ if df is not None:
             )
             st.markdown('</div>', unsafe_allow_html=True)
             
-            # Train model
             with st.spinner("Training model..."):
                 model_params = st.session_state.get('model_params', {})
                 model, X_test, y_test, y_pred = train_model(
@@ -1128,11 +1141,9 @@ if df is not None:
                 )
             
             if model is not None:
-                # Update report with model performance
                 report_data = generate_analysis_report(filtered_df, model, X_test, y_test, y_pred, model_type)
                 st.session_state['report_data'] = report_data
                 
-                # Model Performance
                 st.markdown('<p class="sub-header">Model Performance</p>', unsafe_allow_html=True)
                 st.markdown('<div class="chart-card">', unsafe_allow_html=True)
                 st.write(f"**Accuracy**: {accuracy_score(y_test, y_pred):.2f}")
@@ -1140,7 +1151,6 @@ if df is not None:
                 st.text(classification_report(y_test, y_pred, target_names=['No Churn', 'Churn']))
                 st.markdown('</div>', unsafe_allow_html=True)
                 
-                # Confusion Matrix
                 st.markdown('<p class="sub-header">Confusion Matrix</p>', unsafe_allow_html=True)
                 st.markdown('<div class="chart-card">', unsafe_allow_html=True)
                 cm = confusion_matrix(y_test, y_pred)
@@ -1156,7 +1166,6 @@ if df is not None:
                 st.plotly_chart(fig, use_container_width=True)
                 st.markdown('</div>', unsafe_allow_html=True)
                 
-                # Feature Importance (only for RandomForest)
                 if model_type == 'RandomForest':
                     st.markdown('<p class="sub-header">Feature Importance</p>', unsafe_allow_html=True)
                     st.markdown('<div class="chart-card">', unsafe_allow_html=True)
@@ -1176,7 +1185,6 @@ if df is not None:
                     st.plotly_chart(fig, use_container_width=True)
                     st.markdown('</div>', unsafe_allow_html=True)
                 
-                # Predict for a customer
                 st.markdown('<p class="sub-header">Predict Churn for a Single Customer</p>', unsafe_allow_html=True)
                 st.markdown('<div class="filter-container">', unsafe_allow_html=True)
                 st.write("Enter customer details below to predict churn probability.")
@@ -1234,7 +1242,6 @@ else:
     st.error("Error: Please ensure the dataset file 'customer_churn_data.csv' is available in the correct directory. Some features will be disabled.")
     st.markdown('</div>', unsafe_allow_html=True)
     
-    # Display limited Home page without data
     if st.session_state.page == "Home":
         st.markdown("""
             <div class="hero-section">
@@ -1246,7 +1253,7 @@ else:
         """, unsafe_allow_html=True)
 
         st.markdown('<p class="sub-header">Get Started</p>', unsafe_allow_html=True)
-        col1, col2 = st.columns(2)
+        col1, col2 = st.columns(2, gap="medium")
         with col1:
             if st.button("Explore the Dashboard", key="explore_dashboard"):
                 st.session_state.page = "Dashboard"
@@ -1254,10 +1261,8 @@ else:
         with col2:
             st.markdown(
                 """
-                <a href="https://github.com/felido01/churn_analysis" target="_blank">
-                    <button style="background: #F3F4F6; color: #0F172A; border-radius: 8px; padding: 12px 24px; font-size: 16px; font-weight: 500; border: 1px solid #2DD4BF; transition: background 0.3s ease, transform 0.3s ease; width: 100%;">
-                        View Documentation
-                    </button>
+                <a href="https://github.com/felido01/churn_analysis" target="_blank" class="custom-button">
+                    View Documentation
                 </a>
                 """, 
                 unsafe_allow_html=True
@@ -1278,7 +1283,6 @@ else:
             </div>
         """, unsafe_allow_html=True)
 
-        # Footer Section
         st.markdown("""
             <div class="footer-section">
                 <p>Churn Analytics Dashboard v1.0.0</p>
