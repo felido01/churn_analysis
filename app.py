@@ -73,6 +73,24 @@ st.markdown("""
         color: #FFFFFF;
         transform: scale(1.05);
     }
+    .custom-button {
+        display: inline-block;
+        background: #F3F4F6;
+        color: #0F172A;
+        border-radius: 8px;
+        padding: 12px 24px;
+        font-size: 16px;
+        font-weight: 500;
+        border: 1px solid #2DD4BF;
+        text-decoration: none;
+        transition: background 0.3s ease, transform 0.3s ease;
+        margin: 10px;
+    }
+    .custom-button:hover {
+        background: #2DD4BF;
+        color: #FFFFFF;
+        transform: scale(1.05);
+    }
     .stSelectbox div[data-baseweb="select"]>div {
         background: #F3F4F6;
         color: #0F172A;
@@ -420,7 +438,8 @@ def preprocess_data(df):
 # Train model
 def train_model(X, y, model_type='RandomForest', n_estimators=100, max_depth=None):
     try:
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_stateोन=1
+        )
         if model_type == 'RandomForest':
             model = RandomForestClassifier(n_estimators=n_estimators, max_depth=max_depth, random_state=42, n_jobs=-1)
         else:
@@ -725,9 +744,15 @@ if df is not None:
 
         # Call to Action
         st.markdown('<p class="sub-header">Get Started</p>', unsafe_allow_html=True)
-        if st.button("Explore the Dashboard", key="explore_dashboard"):
-            st.session_state.page = "Dashboard"
-            st.rerun()
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("Explore the Dashboard", key="explore_dashboard"):
+                st.session_state.page = "Dashboard"
+                st.rerun()
+        with col2:
+            st.markdown("""
+                <a href="https://github.com/felido01/churn_analysis" target="_blank" class="custom-button">View Documentation</a>
+            """, unsafe_allow_html=True)
 
         # About Dataset Section
         st.markdown('<p class="sub-header">About the Dataset</p>', unsafe_allow_html=True)
@@ -1220,9 +1245,15 @@ else:
         """, unsafe_allow_html=True)
 
         st.markdown('<p class="sub-header">Get Started</p>', unsafe_allow_html=True)
-        if st.button("Explore the Dashboard", key="explore_dashboard"):
-            st.session_state.page = "Dashboard"
-            st.rerun()
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("Explore the Dashboard", key="explore_dashboard"):
+                st.session_state.page = "Dashboard"
+                st.rerun()
+        with col2:
+            st.markdown("""
+                <a href="https://github.com/felido01/churn_analysis" target="_blank" class="custom-button">View Documentation</a>
+            """, unsafe_allow_html=True)
 
         st.markdown('<p class="sub-header">About the Dataset</p>', unsafe_allow_html=True)
         st.markdown("""
