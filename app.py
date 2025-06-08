@@ -144,6 +144,8 @@ st.markdown("""
         color: #D1D5DB;
         max-width: 600px;
         margin: 0 auto 20px;
+        text-align: center;
+        justify-content: center;
     }
     .mission-section {
         background: #0F172A;
