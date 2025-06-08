@@ -729,14 +729,14 @@ if df is not None:
             st.markdown(f"""
                 <div class="metric-box churn">
                     <h3>{churn_rate:.1f}%</h3>
-                    <p>Churn Rate</p>
+                    <p>Churn Rate (Percentage %) </p>
                 </div>
             """, unsafe_allow_html=True)
         with col2:
             st.markdown(f"""
                 <div class="metric-box">
                     <h3>{total_customers:,}</h3>
-                    <p>Total Customers</p>
+                    <p>Total &nbsp Customers</p>
                 </div>
             """, unsafe_allow_html=True)
         with col3:
