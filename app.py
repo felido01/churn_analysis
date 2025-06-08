@@ -695,13 +695,13 @@ if df is not None:
 
     # Home Page
     if st.session_state.page == "Home":
-      st.markdown("""
-    <div class="hero-section">
-        <h1 class="main-header">Customer Churn Analysis Dashboard</h1>
-        <p class="hero-text" style="text-align: center;">
-            A comprehensive platform for analyzing customer behavior, identifying churn drivers, and predicting at-risk customers to inform strategic retention efforts.
-        </p>
-    </div>
+        st.markdown("""
+            <div class="hero-section">
+                <h1 class="main-header">Customer Churn Analysis Dashboard</h1>
+                <p class="hero-text" style="text-align: center;">
+                    A comprehensive platform for analyzing customer behavior, identifying churn drivers, and predicting at-risk customers to inform strategic retention efforts.
+                </p>
+            </div>
         """, unsafe_allow_html=True)
 
         # Mission Statement
