@@ -11,10 +11,9 @@ from sklearn.metrics import accuracy_score, classification_report, confusion_mat
 import warnings
 warnings.filterwarnings('ignore')
 
-# Set page configuration
+# Setup
 st.set_page_config(page_title="Customer Churn Analysis", layout="wide", initial_sidebar_state="expanded")
 
-# Custom CSS for professional styling
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -72,7 +71,6 @@ st.markdown("""
         font-size: 16px;
         color: #D1D5DB;
         margin: 5px 0 0;
-        font-weight: normal;
     }
     .stButton>button {
         background: #F3F4F6;
@@ -137,6 +135,7 @@ st.markdown("""
         display: flex;
         flex-direction: column;
         justify-content: center;
+        align-items: center;
         box-shadow: 0 8px 16px rgba(0,0,0,0.3);
     }
     .hero-text {
@@ -144,6 +143,7 @@ st.markdown("""
         color: #D1D5DB;
         max-width: 600px;
         margin: 0 auto 20px;
+        text-align: center;
     }
     .mission-section {
         background: #0F172A;
@@ -403,7 +403,6 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Expected columns
 EXPECTED_COLUMNS = [
     'customerID', 'gender', 'SeniorCitizen', 'Partner', 'Dependents', 'tenure',
     'PhoneService', 'MultipleLines', 'InternetService', 'OnlineSecurity',
@@ -412,7 +411,7 @@ EXPECTED_COLUMNS = [
     'MonthlyCharges', 'TotalCharges', 'Churn'
 ]
 
-# Load data with validation
+# Main Functions
 @st.cache_data(show_spinner=False)
 def load_data():
     try:
@@ -437,7 +436,6 @@ def load_data():
         st.error(f"Error loading data: {e}. Please check the file format and content.")
         return None
 
-# Preprocess data
 def preprocess_data(df):
     try:
         df_clean = df.copy()
@@ -459,7 +457,6 @@ def preprocess_data(df):
         st.error(f"Error in preprocessing: {e}. Please check data consistency.")
         return None, None
 
-# Train model
 def train_model(X, y, model_type='RandomForest', n_estimators=100, max_depth=None):
     try:
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
@@ -474,17 +471,13 @@ def train_model(X, y, model_type='RandomForest', n_estimators=100, max_depth=Non
         st.error(f"Error training model: {e}. Please check feature data.")
         return None, None, None, None
 
-# Generate analysis report
 def generate_analysis_report(df, model=None, X_test=None, y_test=None, y_pred=None, model_type=None):
     report = ["Customer Churn Analysis Report", "=" * 40, ""]
-    
-    # Key Metrics
     churn_rate = df['Churn'].value_counts(normalize=True).get('Yes', 0) * 100
     total_customers = len(df)
     avg_tenure = df['tenure'].mean()
     avg_monthly = df['MonthlyCharges'].mean()
     senior_pct = (df['SeniorCitizen'] == 1).mean() * 100
-    
     report.append("Key Metrics")
     report.append("-" * 20)
     report.append(f"Total Customers: {total_customers:,}")
@@ -493,8 +486,6 @@ def generate_analysis_report(df, model=None, X_test=None, y_test=None, y_pred=No
     report.append(f"Average Monthly Charges: ${avg_monthly:.2f}")
     report.append(f"Senior Citizen Percentage: {senior_pct:.1f}%")
     report.append("")
-    
-    # Data Insights
     report.append("Data Insights")
     report.append("-" * 20)
     contract_churn = df.groupby('Contract')['Churn'].value_counts(normalize=True).unstack().fillna(0)
@@ -502,15 +493,12 @@ def generate_analysis_report(df, model=None, X_test=None, y_test=None, y_pred=No
     for contract in contract_churn.index:
         churn_pct = contract_churn.loc[contract].get('Yes', 0) * 100
         report.append(f"- {contract}: {churn_pct:.1f}% churn")
-    
     internet_churn = df.groupby('InternetService')['Churn'].value_counts(normalize=True).unstack().fillna(0)
     report.append("\nChurn by Internet Service:")
     for service in internet_churn.index:
         churn_pct = internet_churn.loc[service].get('Yes', 0) * 100
         report.append(f"- {service}: {churn_pct:.1f}% churn")
     report.append("")
-    
-    # Model Performance
     if model is not None and y_test is not None and y_pred is not None:
         report.append("Model Performance")
         report.append("-" * 20)
@@ -518,7 +506,6 @@ def generate_analysis_report(df, model=None, X_test=None, y_test=None, y_pred=No
         report.append(f"Accuracy: {accuracy_score(y_test, y_pred):.2f}")
         report.append("\nClassification Report:")
         report.append(classification_report(y_test, y_pred, target_names=['No Churn', 'Churn']))
-        
         if model_type == 'RandomForest':
             feature_importance = pd.DataFrame({
                 'feature': X_test.columns,
@@ -527,7 +514,6 @@ def generate_analysis_report(df, model=None, X_test=None, y_test=None, y_pred=No
             report.append("\nFeature Importance (Top 5):")
             for i, row in feature_importance.head(5).iterrows():
                 report.append(f"- {row['feature']}: {row['importance']:.3f}")
-    
     report.append("\nGenerated by Churn Analytics Dashboard")
     report.append(f"Date: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}")
     return "\n".join(report)
@@ -551,7 +537,6 @@ st.sidebar.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# Navigation options
 nav_options = [
     ("Home", "Home"),
     ("Dashboard", "Dashboard"),
@@ -572,7 +557,6 @@ if page != st.session_state.page:
     st.session_state.page = page
     st.rerun()
 
-# Quick Filters
 with st.sidebar.expander("Quick Filters", expanded=False):
     st.markdown("<h4>Apply Quick Filters</h4>", unsafe_allow_html=True)
     if st.button("High-Risk Customers", key="high_risk"):
@@ -589,7 +573,6 @@ with st.sidebar.expander("Quick Filters", expanded=False):
         st.session_state.quick_filter = None
         st.rerun()
 
-# Model Parameters
 with st.sidebar.expander("Model Parameters", expanded=False):
     st.markdown("<h4>Adjust Model Settings</h4>", unsafe_allow_html=True)
     model_type = st.selectbox("Model Type", ["RandomForest", "LogisticRegression"], key="sidebar_model_type")
@@ -600,7 +583,6 @@ with st.sidebar.expander("Model Parameters", expanded=False):
     else:
         st.session_state.model_params = {}
 
-# Download Reports
 with st.sidebar.expander("Download Reports", expanded=False):
     st.markdown("<h4>Export Data & Reports</h4>", unsafe_allow_html=True)
     if st.session_state.df is not None:
@@ -612,7 +594,6 @@ with st.sidebar.expander("Download Reports", expanded=False):
             mime="text/csv",
             key="download_data"
         )
-        
         report_data = generate_analysis_report(st.session_state.df)
         st.download_button(
             label="Download Analysis Report",
@@ -622,7 +603,6 @@ with st.sidebar.expander("Download Reports", expanded=False):
             key="download_report"
         )
 
-# Contact Us
 with st.sidebar.expander("Contact Us", expanded=True):
     st.markdown("<h4>Connect with Us</h4>", unsafe_allow_html=True)
     st.markdown("""
@@ -634,7 +614,6 @@ with st.sidebar.expander("Contact Us", expanded=True):
         </div>
     """, unsafe_allow_html=True)
 
-# Help & Support
 with st.sidebar.expander("Help & Support", expanded=False):
     st.markdown("<h4>Help Center</h4>", unsafe_allow_html=True)
     with st.container():
@@ -668,7 +647,6 @@ with st.sidebar.expander("Help & Support", expanded=False):
             </div>
         """, unsafe_allow_html=True)
 
-# Sidebar Footer
 st.sidebar.markdown("""
     <div class="sidebar-footer">
         <p>Churn Analytics Dashboard v1.0.0</p>
@@ -676,10 +654,9 @@ st.sidebar.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# Main Content
+# Page Navigation
 df = st.session_state.df
 if df is not None:
-    # Apply quick filters if set
     filtered_df = df.copy()
     if st.session_state.quick_filter:
         for key, value in st.session_state.quick_filter.items():
@@ -693,7 +670,6 @@ if df is not None:
             except Exception as e:
                 st.error(f"Error applying filter on {key}: {e}")
 
-    # Home Page
     if st.session_state.page == "Home":
         st.markdown("""
             <div class="hero-section">
@@ -704,7 +680,6 @@ if df is not None:
             </div>
         """, unsafe_allow_html=True)
 
-        # Mission Statement
         st.markdown('<p class="sub-header">Our Mission</p>', unsafe_allow_html=True)
         st.markdown("""
             <div class="mission-section">
@@ -717,7 +692,6 @@ if df is not None:
             </div>
         """, unsafe_allow_html=True)
 
-        # Key Metrics Section
         st.markdown('<p class="sub-header">Key Metrics</p>', unsafe_allow_html=True)
         col1, col2, col3, col4 = st.columns(4, gap="medium")
         churn_rate = filtered_df['Churn'].value_counts(normalize=True).get('Yes', 0) * 100
@@ -754,7 +728,6 @@ if df is not None:
                 </div>
             """, unsafe_allow_html=True)
 
-        # Data Preview
         st.markdown('<p class="sub-header">Dataset Preview</p>', unsafe_allow_html=True)
         st.markdown("""
             <div class="preview-section">
@@ -764,7 +737,6 @@ if df is not None:
         """, unsafe_allow_html=True)
         st.dataframe(filtered_df.head(5), use_container_width=True)
 
-        # Call to Action
         st.markdown('<p class="sub-header">Get Started</p>', unsafe_allow_html=True)
         col1, col2 = st.columns(2, gap="medium")
         with col1:
@@ -781,7 +753,6 @@ if df is not None:
                 unsafe_allow_html=True
             )
 
-        # About Dataset Section
         st.markdown('<p class="sub-header">About the Dataset</p>', unsafe_allow_html=True)
         st.markdown("""
             <div class="about-dataset">
@@ -796,7 +767,6 @@ if df is not None:
             </div>
         """, unsafe_allow_html=True)
 
-        # Footer Section
         st.markdown("""
             <div class="footer-section">
                 <p>Churn Analytics Dashboard v1.0.0</p>
@@ -804,7 +774,6 @@ if df is not None:
             </div>
         """, unsafe_allow_html=True)
 
-    # Dashboard Page
     elif st.session_state.page == "Dashboard":
         st.markdown("""
             <div style="background: linear-gradient(90deg, #1E3A8A, #2DD4BF); padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); margin-bottom: 20px;">
@@ -814,7 +783,6 @@ if df is not None:
             </div>
         """, unsafe_allow_html=True)
         
-        # Filters
         st.markdown('<div class="filter-container"><h4>Filter Data</h4></div>', unsafe_allow_html=True)
         with st.container():
             col1, col2, col3 = st.columns(3)
@@ -846,7 +814,6 @@ if df is not None:
                 (filtered_df['tenure'].between(tenure_range[0], tenure_range[1]))
             ]
         
-        # Key Metrics
         st.markdown('<p class="sub-header">Key Metrics</p>', unsafe_allow_html=True)
         col1, col2, col3, col4, col5 = st.columns(5, gap="medium")
         churn_rate = filtered_df['Churn'].value_counts(normalize=True).get('Yes', 0) * 100
@@ -891,7 +858,6 @@ if df is not None:
                 </div>
             """, unsafe_allow_html=True)
         
-        # Visualizations
         st.markdown('<p class="sub-header">Visual Insights</p>', unsafe_allow_html=True)
         col1, col2 = st.columns(2)
         
@@ -952,7 +918,6 @@ if df is not None:
             st.plotly_chart(fig4, use_container_width=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
-    # Data Overview
     elif st.session_state.page == "Data Overview":
         st.markdown('<p class="main-header">Data Overview</p>', unsafe_allow_html=True)
         st.markdown('<div class="chart-card">', unsafe_allow_html=True)
@@ -993,7 +958,6 @@ if df is not None:
         st.write(missing[missing > 0] if missing.sum() > 0 else "No missing values.")
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # Exploratory Data Analysis
     elif st.session_state.page == "EDA":
         st.markdown('<p class="main-header">Exploratory Data Analysis</p>', unsafe_allow_html=True)
         
@@ -1111,11 +1075,10 @@ if df is not None:
         st.plotly_chart(fig, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # Churn Prediction
     elif st.session_state.page == "Churn Prediction":
         st.markdown('<p class="main-header">Churn Prediction Model</p>', unsafe_allow_html=True)
         
-        with st.spinner("Preprocessing data..."):
+        with st.spinner("Processing data..."):
             df_clean, le_dict = preprocess_data(df)
         
         if df_clean is not None:
@@ -1130,76 +1093,57 @@ if df is not None:
                 key="model_type_main",
                 index=["RandomForest", "LogisticRegression"].index(st.session_state.get('sidebar_model_type', 'RandomForest'))
             )
-            st.markdown('</div>', unsafe_allow_html=True)
-            
+            st.markdown("<br>")
             with st.spinner("Training model..."):
                 model_params = st.session_state.get('model_params', {})
                 model, X_test, y_test, y_pred = train_model(
-                    X, y, model_type,
+                    X, y, model_type=model_type,
                     n_estimators=model_params.get('n_estimators', 100),
                     max_depth=model_params.get('max_depth', None)
                 )
+            )
             
             if model is not None:
-                report_data = generate_analysis_report(filtered_df, model, X_test, y_test, y_pred, model_type)
+                report_data = generate_report_data(filtered_df, model, X_test, y_test, y_pred, model_type)
                 st.session_state['report_data'] = report_data
                 
-                st.markdown('<p class="sub-header">Model Performance</p>', unsafe_allow_html=True)
-                st.markdown('<div class="chart-card">', unsafe_allow_html=True)
-                st.write(f"**Accuracy**: {accuracy_score(y_test, y_pred):.2f}")
-                st.write("**Classification Report**:")
-                st.text(classification_report(y_test, y_pred, target_names=['No Churn', 'Churn']))
-                st.markdown('</div>', unsafe_allow_html=True)
+                st.markdown('<p class="sub-header">Model Performance Summary</p>')
+                st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+                st.write(f'<p><strong>Accuracy:</strong> {accuracy_score(y_test, y_pred):.2f}%</p>')
+                st.write("<p><strong>Classification Report:</strong></p>")
+                st.write("<pre>" + classification_report(y_test, y_pred, target_names=['No Churn', 'Churned']) + "</pre>")
+                st.markdown('</div>')
                 
-                st.markdown('<p class="sub-header">Confusion Matrix</p>', unsafe_allow_html=True)
-                st.markdown('<div class="chart-card">', unsafe_allow_html=True)
+                st.markdown('<p class="sub-header">Confusion Matrix</p>')
+                st.markdown('<div class="metric-card">', unsafe_allow_html=True)
                 cm = confusion_matrix(y_test, y_pred)
-                fig = go.Figure(data=go.Heatmap(
-                    z=cm,
-                    x=['No Churn', 'Churn'],
-                    y=['No Churn', 'Churn'],
-                    text=cm,
-                    texttemplate="%{text}",
-                    colorscale='Blues'
-                ))
-                fig.update_layout(title="Confusion Matrix", template='plotly_dark')
-                st.plotly_chart(fig, use_container_width=True)
-                st.markdown('</div>', unsafe_allow_html=True)
+                st.write("<p><strong>Confusion Matrix:</strong></p>")
+                st.write(pd.DataFrame(cm, index=['No Churn', 'Churn'], columns=['No Churn', 'Churn']))
                 
                 if model_type == 'RandomForest':
-                    st.markdown('<p class="sub-header">Feature Importance</p>', unsafe_allow_html=True)
-                    st.markdown('<div class="chart-card">', unsafe_allow_html=True)
+                    st.markdown('<p class="sub-header">Feature Importance</p>')
+                    st.markdown('<div class="metric-card">', unsafe_feature=True)
                     feature_importance = pd.DataFrame({
-                        'feature': X.columns,
+                        'Feature': X.columns,
                         'importance': model.feature_importances_
                     }).sort_values(by='importance', ascending=False)
-                    fig = px.bar(
-                        feature_importance,
-                        x='importance',
-                        y='feature',
-                        title="Feature Importance",
-                        color_discrete_sequence=['#2DD4BF'],
-                        template='plotly_dark'
-                    )
-                    fig.update_layout(title_x=0.5, margin=dict(t=50, b=20))
-                    st.plotly_chart(fig, use_container_width=True)
-                    st.markdown('</div>', unsafe_allow_html=True)
+                    st.write("<p><strong>Top 5 Features:</strong></p>")
+                    st.write(feature_importance.head(5))
+                    st.markdown('</div>')
                 
-                st.markdown('<p class="sub-header">Predict Churn for a Single Customer</p>', unsafe_allow_html=True)
-                st.markdown('<div class="filter-container">', unsafe_allow_html=True)
-                st.write("Enter customer details below to predict churn probability.")
+                st.markdown('<p class="sub-header">Predict Churn for a Customer</p>')
+                st.markdown('<div class="form-container">', unsafe_form=True)
+                st.markdown("<p>Enter customer details to predict churn probability.</p>")
                 
-                with st.form("prediction_form"):
+                with st.form_container("prediction_form"):
                     cols = st.columns(4)
                     inputs = {}
                     for i, col in enumerate(X.columns):
                         with cols[i % 4]:
-                            if col in le_dict:
-                                unique_vals = list(df[col].unique())
+                            if col in inputs:
                                 inputs[col] = st.selectbox(
                                     f"{col}",
-                                    unique_vals,
-                                    help=f"Select a value for {col}",
+                                    list(df[col].unique()),
                                     key=f"pred_{col}"
                                 )
                             else:
@@ -1211,51 +1155,50 @@ if df is not None:
                                     min_value=min_val,
                                     max_value=max_val,
                                     value=avg_val,
-                                    help=f"Enter a value for {col} (range: {min_val:.2f} to {max_val:.2f})",
                                     key=f"input_{col}"
                                 )
                     
                     submit = st.form_submit_button("Predict Churn")
                     
                     if submit:
-                        with st.spinner("Making prediction..."):
-                            input_data = pd.DataFrame([inputs])
-                            try:
-                                for col in le_dict:
-                                    if col in input_data.columns:
-                                        if input_data[col].iloc[0] in le_dict[col].classes_:
-                                            input_data[col] = le_dict[col].transform([input_data[col].iloc[0]])[0]
-                                        else:
-                                            st.error(f"Value '{input_data[col].iloc[0]}' in {col} is not recognized. Please select a valid option.")
-                                            st.stop()
-                                prediction = model.predict(input_data)
-                                prob = model.predict_proba(input_data)[0]
-                                st.markdown('<div class="metric-box">', unsafe_allow_html=True)
-                                st.write(f"**Prediction**: {'Churn' if prediction[0] == 1 else 'No Churn'}")
-                                st.write(f"**Churn Probability**: {prob[1]:.2%}")
-                                st.markdown('</div>', unsafe_allow_html=True)
-                            except Exception as e:
-                                st.error(f"Prediction error: {e}. Please check input data.")
-                st.markdown('</div>', unsafe_allow_html=True)
+                        input_data = pd.DataFrame([inputs])
+                        try:
+                            for col in le_dict:
+                                if col in input_data.columns:
+                                    if input_data[col].iloc[0] in le_dict[col].values_:
+                                        input_data[col] = le_dict[col].transform_data([input_data[col].iloc[0]])[0]
+                                    else:
+                                        st.error(f"Invalid value '{input_data[col].iloc[0]}' for {col}. Select a valid.")
+                                        st.stop()
+                                    prediction = model.predict(input_data)
+                                    prob = model.predict_proba(input_data)[0]
+                                    st.markdown('<div class="metric-box">', unsafe_margin=True)
+                                    st.markdown(f"<p><strong>Prediction:</strong> {'Churn' if prediction[0] == 1 else 'No Churn'}</p>")
+                                    st.markdown(f"<p><strong>Churn Probability:</strong> {prob[1]:.2f}%</p>")
+                                    st.markdown('</div>')
+                                except Exception as e:
+                                    st.error(f"Prediction error: {e}. Check input data.")
+                                st.markdown('</div>')
+
 else:
     st.markdown('<div class="metric-box">', unsafe_allow_html=True)
-    st.error("Error: Please ensure the dataset file 'customer_churn_data.csv' is available in the correct directory. Some features will be disabled.")
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.error("Error: Dataset file 'customer_churn_data.csv' not found. Ensure the file is in the correct directory.")
+    st.markdown('</div>')
     
     if st.session_state.page == "Home":
         st.markdown("""
             <div class="hero-section">
                 <h1 class="main-header">Customer Churn Analysis Dashboard</h1>
                 <p class="hero-text">
-                    A comprehensive platform for analyzing customer behavior, identifying churn drivers, and predicting at-risk customers to inform strategic retention efforts.
+                    A comprehensive platform for analyzing customer behavior, identifying churn drivers, and predicting at-risk customers to inform strategic retention.
                 </p>
             </div>
         """, unsafe_allow_html=True)
 
-        st.markdown('<p class="sub-header">Get Started</p>', unsafe_allow_html=True)
+        st.markdown('<p class="sub-header">Get Started</p>')
         col1, col2 = st.columns(2, gap="medium")
         with col1:
-            if st.button("Explore the Dashboard", key="explore_dashboard"):
+            if st.button("Explore the Dashboard"):
                 st.session_state.page = "Dashboard"
                 st.rerun()
         with col2:
@@ -1264,28 +1207,28 @@ else:
                 <a href="https://github.com/felido01/churn_analysis" target="_blank" class="custom-button">
                     View Documentation
                 </a>
-                """, 
+                """,
                 unsafe_allow_html=True
             )
 
-        st.markdown('<p class="sub-header">About the Dataset</p>', unsafe_allow_html=True)
+        st.markdown('<p class="sub-header">About the Dataset</p>')
         st.markdown("""
             <div class="about-dataset">
                 <h3>Dataset Overview</h3>
                 <p>The telecom customer dataset provides comprehensive data to support churn analysis and retention strategies. Key features include:</p>
                 <ul>
                     <li>Customer Demographics: Gender, Senior Citizen status, Partner, Dependents.</li>
-                    <li>Service Subscriptions: Phone, Internet, Online Security, Streaming, and more.</li>
-                    <li>Billing Information: Contract types, Payment methods, Monthly and Total Charges.</li>
-                    <li>Churn Status: Indicates whether a customer has churned (Yes/No).</li>
+                    <li>Service Subscriptions: Phone, Internet, Online Security, Streaming, etc.</li>
+                    <li>Billing Information: Contracts, Payments, Monthly and Total Charges.</li>
+                    <li>Churn Status: Indicates whether customer has churned (Yes/No).</li>
                 </ul>
-                <p><b>Note:</b> Please upload the dataset to enable full functionality.</p>
+                <p><b>Note:</b> Upload dataset to enable full functionality.</p>
             </div>
-        """, unsafe_allow_html=True)
+                """, unsafe_allow_html=True)
 
         st.markdown("""
             <div class="footer-section">
                 <p>Churn Analytics Dashboard v1.0.0</p>
-                <p>Powered by <a href="https://felido01.github.io/felixidowu01/intro.html" target="_blank">Felixidowu</a></p>
+                <p>Powered by <a href="https://felido01.github.io/felixidowu01/intro.html">Felixidowu</a></p>
             </div>
-        """, unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
