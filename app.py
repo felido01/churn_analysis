@@ -11,9 +11,10 @@ from sklearn.metrics import accuracy_score, classification_report, confusion_mat
 import warnings
 warnings.filterwarnings('ignore')
 
-# Setup
+# Set page configuration
 st.set_page_config(page_title="Customer Churn Analysis", layout="wide", initial_sidebar_state="expanded")
 
+# Custom CSS for professional styling
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -71,6 +72,7 @@ st.markdown("""
         font-size: 16px;
         color: #D1D5DB;
         margin: 5px 0 0;
+        font-weight: normal;
     }
     .stButton>button {
         background: #F3F4F6;
@@ -135,7 +137,6 @@ st.markdown("""
         display: flex;
         flex-direction: column;
         justify-content: center;
-        align-items: center;
         box-shadow: 0 8px 16px rgba(0,0,0,0.3);
     }
     .hero-text {
@@ -143,7 +144,6 @@ st.markdown("""
         color: #D1D5DB;
         max-width: 600px;
         margin: 0 auto 20px;
-        text-align: center;
     }
     .mission-section {
         background: #0F172A;
@@ -403,6 +403,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# Expected columns
 EXPECTED_COLUMNS = [
     'customerID', 'gender', 'SeniorCitizen', 'Partner', 'Dependents', 'tenure',
     'PhoneService', 'MultipleLines', 'InternetService', 'OnlineSecurity',
@@ -411,7 +412,7 @@ EXPECTED_COLUMNS = [
     'MonthlyCharges', 'TotalCharges', 'Churn'
 ]
 
-# Main Functions
+# Load data with validation
 @st.cache_data(show_spinner=False)
 def load_data():
     try:
@@ -436,6 +437,7 @@ def load_data():
         st.error(f"Error loading data: {e}. Please check the file format and content.")
         return None
 
+# Preprocess data
 def preprocess_data(df):
     try:
         df_clean = df.copy()
@@ -457,6 +459,7 @@ def preprocess_data(df):
         st.error(f"Error in preprocessing: {e}. Please check data consistency.")
         return None, None
 
+# Train model
 def train_model(X, y, model_type='RandomForest', n_estimators=100, max_depth=None):
     try:
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
@@ -471,13 +474,17 @@ def train_model(X, y, model_type='RandomForest', n_estimators=100, max_depth=Non
         st.error(f"Error training model: {e}. Please check feature data.")
         return None, None, None, None
 
+# Generate analysis report
 def generate_analysis_report(df, model=None, X_test=None, y_test=None, y_pred=None, model_type=None):
     report = ["Customer Churn Analysis Report", "=" * 40, ""]
+    
+    # Key Metrics
     churn_rate = df['Churn'].value_counts(normalize=True).get('Yes', 0) * 100
     total_customers = len(df)
     avg_tenure = df['tenure'].mean()
     avg_monthly = df['MonthlyCharges'].mean()
     senior_pct = (df['SeniorCitizen'] == 1).mean() * 100
+    
     report.append("Key Metrics")
     report.append("-" * 20)
     report.append(f"Total Customers: {total_customers:,}")
@@ -486,6 +493,8 @@ def generate_analysis_report(df, model=None, X_test=None, y_test=None, y_pred=No
     report.append(f"Average Monthly Charges: ${avg_monthly:.2f}")
     report.append(f"Senior Citizen Percentage: {senior_pct:.1f}%")
     report.append("")
+    
+    # Data Insights
     report.append("Data Insights")
     report.append("-" * 20)
     contract_churn = df.groupby('Contract')['Churn'].value_counts(normalize=True).unstack().fillna(0)
@@ -493,12 +502,15 @@ def generate_analysis_report(df, model=None, X_test=None, y_test=None, y_pred=No
     for contract in contract_churn.index:
         churn_pct = contract_churn.loc[contract].get('Yes', 0) * 100
         report.append(f"- {contract}: {churn_pct:.1f}% churn")
+    
     internet_churn = df.groupby('InternetService')['Churn'].value_counts(normalize=True).unstack().fillna(0)
     report.append("\nChurn by Internet Service:")
     for service in internet_churn.index:
         churn_pct = internet_churn.loc[service].get('Yes', 0) * 100
         report.append(f"- {service}: {churn_pct:.1f}% churn")
     report.append("")
+    
+    # Model Performance
     if model is not None and y_test is not None and y_pred is not None:
         report.append("Model Performance")
         report.append("-" * 20)
@@ -506,6 +518,7 @@ def generate_analysis_report(df, model=None, X_test=None, y_test=None, y_pred=No
         report.append(f"Accuracy: {accuracy_score(y_test, y_pred):.2f}")
         report.append("\nClassification Report:")
         report.append(classification_report(y_test, y_pred, target_names=['No Churn', 'Churn']))
+        
         if model_type == 'RandomForest':
             feature_importance = pd.DataFrame({
                 'feature': X_test.columns,
@@ -514,6 +527,7 @@ def generate_analysis_report(df, model=None, X_test=None, y_test=None, y_pred=No
             report.append("\nFeature Importance (Top 5):")
             for i, row in feature_importance.head(5).iterrows():
                 report.append(f"- {row['feature']}: {row['importance']:.3f}")
+    
     report.append("\nGenerated by Churn Analytics Dashboard")
     report.append(f"Date: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}")
     return "\n".join(report)
@@ -537,6 +551,7 @@ st.sidebar.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
+# Navigation options
 nav_options = [
     ("Home", "Home"),
     ("Dashboard", "Dashboard"),
@@ -557,6 +572,7 @@ if page != st.session_state.page:
     st.session_state.page = page
     st.rerun()
 
+# Quick Filters
 with st.sidebar.expander("Quick Filters", expanded=False):
     st.markdown("<h4>Apply Quick Filters</h4>", unsafe_allow_html=True)
     if st.button("High-Risk Customers", key="high_risk"):
@@ -573,6 +589,7 @@ with st.sidebar.expander("Quick Filters", expanded=False):
         st.session_state.quick_filter = None
         st.rerun()
 
+# Model Parameters
 with st.sidebar.expander("Model Parameters", expanded=False):
     st.markdown("<h4>Adjust Model Settings</h4>", unsafe_allow_html=True)
     model_type = st.selectbox("Model Type", ["RandomForest", "LogisticRegression"], key="sidebar_model_type")
@@ -583,6 +600,7 @@ with st.sidebar.expander("Model Parameters", expanded=False):
     else:
         st.session_state.model_params = {}
 
+# Download Reports
 with st.sidebar.expander("Download Reports", expanded=False):
     st.markdown("<h4>Export Data & Reports</h4>", unsafe_allow_html=True)
     if st.session_state.df is not None:
@@ -594,6 +612,7 @@ with st.sidebar.expander("Download Reports", expanded=False):
             mime="text/csv",
             key="download_data"
         )
+        
         report_data = generate_analysis_report(st.session_state.df)
         st.download_button(
             label="Download Analysis Report",
@@ -603,6 +622,7 @@ with st.sidebar.expander("Download Reports", expanded=False):
             key="download_report"
         )
 
+# Contact Us
 with st.sidebar.expander("Contact Us", expanded=True):
     st.markdown("<h4>Connect with Us</h4>", unsafe_allow_html=True)
     st.markdown("""
@@ -614,6 +634,7 @@ with st.sidebar.expander("Contact Us", expanded=True):
         </div>
     """, unsafe_allow_html=True)
 
+# Help & Support
 with st.sidebar.expander("Help & Support", expanded=False):
     st.markdown("<h4>Help Center</h4>", unsafe_allow_html=True)
     with st.container():
@@ -647,6 +668,7 @@ with st.sidebar.expander("Help & Support", expanded=False):
             </div>
         """, unsafe_allow_html=True)
 
+# Sidebar Footer
 st.sidebar.markdown("""
     <div class="sidebar-footer">
         <p>Churn Analytics Dashboard v1.0.0</p>
@@ -654,9 +676,10 @@ st.sidebar.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# Page Navigation
+# Main Content
 df = st.session_state.df
 if df is not None:
+    # Apply quick filters if set
     filtered_df = df.copy()
     if st.session_state.quick_filter:
         for key, value in st.session_state.quick_filter.items():
@@ -670,6 +693,7 @@ if df is not None:
             except Exception as e:
                 st.error(f"Error applying filter on {key}: {e}")
 
+    # Home Page
     if st.session_state.page == "Home":
         st.markdown("""
             <div class="hero-section">
@@ -680,6 +704,7 @@ if df is not None:
             </div>
         """, unsafe_allow_html=True)
 
+        # Mission Statement
         st.markdown('<p class="sub-header">Our Mission</p>', unsafe_allow_html=True)
         st.markdown("""
             <div class="mission-section">
@@ -692,6 +717,7 @@ if df is not None:
             </div>
         """, unsafe_allow_html=True)
 
+        # Key Metrics Section
         st.markdown('<p class="sub-header">Key Metrics</p>', unsafe_allow_html=True)
         col1, col2, col3, col4 = st.columns(4, gap="medium")
         churn_rate = filtered_df['Churn'].value_counts(normalize=True).get('Yes', 0) * 100
@@ -728,6 +754,7 @@ if df is not None:
                 </div>
             """, unsafe_allow_html=True)
 
+        # Data Preview
         st.markdown('<p class="sub-header">Dataset Preview</p>', unsafe_allow_html=True)
         st.markdown("""
             <div class="preview-section">
@@ -737,6 +764,7 @@ if df is not None:
         """, unsafe_allow_html=True)
         st.dataframe(filtered_df.head(5), use_container_width=True)
 
+        # Call to Action
         st.markdown('<p class="sub-header">Get Started</p>', unsafe_allow_html=True)
         col1, col2 = st.columns(2, gap="medium")
         with col1:
@@ -753,6 +781,7 @@ if df is not None:
                 unsafe_allow_html=True
             )
 
+        # About Dataset Section
         st.markdown('<p class="sub-header">About the Dataset</p>', unsafe_allow_html=True)
         st.markdown("""
             <div class="about-dataset">
@@ -767,6 +796,7 @@ if df is not None:
             </div>
         """, unsafe_allow_html=True)
 
+        # Footer Section
         st.markdown("""
             <div class="footer-section">
                 <p>Churn Analytics Dashboard v1.0.0</p>
@@ -774,6 +804,7 @@ if df is not None:
             </div>
         """, unsafe_allow_html=True)
 
+    # Dashboard Page
     elif st.session_state.page == "Dashboard":
         st.markdown("""
             <div style="background: linear-gradient(90deg, #1E3A8A, #2DD4BF); padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); margin-bottom: 20px;">
@@ -783,6 +814,7 @@ if df is not None:
             </div>
         """, unsafe_allow_html=True)
         
+        # Filters
         st.markdown('<div class="filter-container"><h4>Filter Data</h4></div>', unsafe_allow_html=True)
         with st.container():
             col1, col2, col3 = st.columns(3)
@@ -802,7 +834,7 @@ if df is not None:
                 )
             with col3:
                 tenure_range = st.slider(
-                    "Tenure Range (Months)",
+                    "Tenure Range (months)",
                     int(df['tenure'].min()),
                     int(df['tenure'].max()),
                     (int(df['tenure'].min()), int(df['tenure'].max())),
@@ -814,6 +846,7 @@ if df is not None:
                 (filtered_df['tenure'].between(tenure_range[0], tenure_range[1]))
             ]
         
+        # Key Metrics
         st.markdown('<p class="sub-header">Key Metrics</p>', unsafe_allow_html=True)
         col1, col2, col3, col4, col5 = st.columns(5, gap="medium")
         churn_rate = filtered_df['Churn'].value_counts(normalize=True).get('Yes', 0) * 100
@@ -858,6 +891,7 @@ if df is not None:
                 </div>
             """, unsafe_allow_html=True)
         
+        # Visualizations
         st.markdown('<p class="sub-header">Visual Insights</p>', unsafe_allow_html=True)
         col1, col2 = st.columns(2)
         
@@ -890,7 +924,7 @@ if df is not None:
             st.markdown('</div>', unsafe_allow_html=True)
         
         with col2:
-            st.markdown('<div class="chart-card">/Event promotion', unsafe_html=True)
+            st.markdown('<div class="chart-card">', unsafe_allow_html=True)
             fig3 = px.histogram(
                 filtered_df,
                 x='Contract',
@@ -902,9 +936,9 @@ if df is not None:
             )
             fig3.update_layout(title_x=0.5, margin=dict(t=50, b=20))
             st.plotly_chart(fig3, use_container_width=True)
-            st.markdown('</div>', unsafe_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
             
-            st.markdown('<div class="chart-card">', unsafe_html=True)
+            st.markdown('<div class="chart-card">', unsafe_allow_html=True)
             fig4 = px.histogram(
                 filtered_df,
                 x='InternetService',
@@ -916,8 +950,9 @@ if df is not None:
             )
             fig4.update_layout(title_x=0.5, margin=dict(t=50, b=20))
             st.plotly_chart(fig4, use_container_width=True)
-            st.markdown('</div>', unsafe_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
 
+    # Data Overview
     elif st.session_state.page == "Data Overview":
         st.markdown('<p class="main-header">Data Overview</p>', unsafe_allow_html=True)
         st.markdown('<div class="chart-card">', unsafe_allow_html=True)
@@ -928,12 +963,12 @@ if df is not None:
         st.markdown('<div class="chart-card">', unsafe_allow_html=True)
         st.write("### Column Descriptions")
         st.markdown("""
-        - **CustomerID**: Unique identifier for each customer.
-        - **Gender**: Gender of the customer (Male, Female).
+        - **customerID**: Unique identifier for each customer.
+        - **gender**: Gender of the customer (Male, Female).
         - **SeniorCitizen**: Whether the customer is a senior citizen (1: Yes, 0: No).
         - **Partner**: Whether the customer has a partner (Yes, No).
         - **Dependents**: Whether the customer has dependents (Yes, No).
-        - **Tenure**: Number of months the customer has stayed with the company.
+        - **tenure**: Number of months the customer has stayed with the company.
         - **PhoneService**: Whether the customer has phone service (Yes, No).
         - **MultipleLines**: Whether the customer has multiple lines (Yes, No, No phone service).
         - **InternetService**: Customer’s internet service provider (DSL, Fiber optic, No).
@@ -958,6 +993,7 @@ if df is not None:
         st.write(missing[missing > 0] if missing.sum() > 0 else "No missing values.")
         st.markdown('</div>', unsafe_allow_html=True)
 
+    # Exploratory Data Analysis
     elif st.session_state.page == "EDA":
         st.markdown('<p class="main-header">Exploratory Data Analysis</p>', unsafe_allow_html=True)
         
@@ -980,7 +1016,7 @@ if df is not None:
                 )
             with col3:
                 tenure_range = st.slider(
-                    "Tenure Range (Months)",
+                    "Tenure Range (months)",
                     int(df['tenure'].min()),
                     int(df['tenure'].max()),
                     (int(df['tenure'].min()), int(df['tenure'].max())),
@@ -1022,18 +1058,18 @@ if df is not None:
             filtered_df,
             x=num_feature,
             color='Churn',
-            margin="box",
+            marginal="box",
             title=f"{num_feature} Distribution by Churn",
             color_discrete_sequence=['#F43F5E', '#2DD4BF'],
             template='plotly_dark'
         )
         fig.update_layout(title_x=0.5, margin=dict(t=50, b=20))
         st.plotly_chart(fig, use_container_width=True)
-        st.markdown('</div>', unsafe_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
         categorical_cols = [
             col for col in df.columns 
-            if col in EXPECTED_COLUMNS and col != 'CustomerID' and df[col].dtype == 'object'
+            if col in EXPECTED_COLUMNS and col != 'customerID' and df[col].dtype == 'object'
         ]
         st.markdown('<p class="sub-header">Categorical Features Analysis</p>', unsafe_allow_html=True)
         st.markdown('<div class="chart-card">', unsafe_allow_html=True)
@@ -1051,12 +1087,12 @@ if df is not None:
             color_discrete_sequence=['#F43F5E', '#2DD4BF'],
             template='plotly_dark'
         )
-        fig.update_layout(title_x=0.5, margin=dict(t=40, b=20))
+        fig.update_layout(title_x=0.5, margin=dict(t=50, b=20))
         st.plotly_chart(fig, use_container_width=True)
-        st.markdown('</div>', unsafe_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
         st.markdown('<p class="sub-header">Correlation Matrix (Numerical Features)</p>', unsafe_allow_html=True)
-        st.markdown('<div class="chart-card">', unsafe_html=True)
+        st.markdown('<div class="chart-card">', unsafe_allow_html=True)
         numeric_df = filtered_df[numerical_cols].copy()
         numeric_df['TotalCharges'] = pd.to_numeric(numeric_df['TotalCharges'], errors='coerce')
         numeric_df = numeric_df.fillna(numeric_df.median())
@@ -1073,16 +1109,17 @@ if df is not None:
         ))
         fig.update_layout(title="Correlation Matrix", template='plotly_dark')
         st.plotly_chart(fig, use_container_width=True)
-        st.markdown('</div>', unsafe_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
+    # Churn Prediction
     elif st.session_state.page == "Churn Prediction":
         st.markdown('<p class="main-header">Churn Prediction Model</p>', unsafe_allow_html=True)
         
-        with st.spinner("Processing data..."):
+        with st.spinner("Preprocessing data..."):
             df_clean, le_dict = preprocess_data(df)
         
         if df_clean is not None:
-            X = df_clean.drop(['customerID', 'Churn'], axis=1')
+            X = df_clean.drop(['customerID', 'Churn'], axis=1)
             y = df_clean['Churn']
             
             st.markdown('<div class="filter-container">', unsafe_allow_html=True)
@@ -1093,7 +1130,8 @@ if df is not None:
                 key="model_type_main",
                 index=["RandomForest", "LogisticRegression"].index(st.session_state.get('sidebar_model_type', 'RandomForest'))
             )
-            st.markdown('<br>')
+            st.markdown('</div>', unsafe_allow_html=True)
+            
             with st.spinner("Training model..."):
                 model_params = st.session_state.get('model_params', {})
                 model, X_test, y_test, y_pred = train_model(
@@ -1199,7 +1237,6 @@ if df is not None:
                             except Exception as e:
                                 st.error(f"Prediction error: {e}. Please check input data.")
                 st.markdown('</div>', unsafe_allow_html=True)
-
 else:
     st.markdown('<div class="metric-box">', unsafe_allow_html=True)
     st.error("Error: Please ensure the dataset file 'customer_churn_data.csv' is available in the correct directory. Some features will be disabled.")
@@ -1218,7 +1255,7 @@ else:
         st.markdown('<p class="sub-header">Get Started</p>', unsafe_allow_html=True)
         col1, col2 = st.columns(2, gap="medium")
         with col1:
-            if st.button("Explore the Dashboard"):
+            if st.button("Explore the Dashboard", key="explore_dashboard"):
                 st.session_state.page = "Dashboard"
                 st.rerun()
         with col2:
@@ -1242,7 +1279,7 @@ else:
                     <li>Billing Information: Contract types, Payment methods, Monthly and Total Charges.</li>
                     <li>Churn Status: Indicates whether a customer has churned (Yes/No).</li>
                 </ul>
-                <p><b>Note:</b> Upload the dataset to enable full functionality.</p>
+                <p><b>Note:</b> Please upload the dataset to enable full functionality.</p>
             </div>
         """, unsafe_allow_html=True)
 
