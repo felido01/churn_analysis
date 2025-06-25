@@ -3,11 +3,13 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
-from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import LabelEncoder, StandardScaler, OneHotEncoder
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, roc_auc_score
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, roc_auc_score, precision_recall_curve
+from imblearn.over_sampling import SMOTE
+from scipy import stats
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -428,6 +430,10 @@ def load_data():
             if df[col].isnull().any():
                 st.warning(f"Column {col} contains missing or invalid values. Imputing with median.")
                 df[col] = df[col].fillna(df[col].median())
+            # Check for negative values
+            if (df[col] < 0).any():
+                st.warning(f"Column {col} contains negative values. Replacing with median.")
+                df[col] = df[col].clip(lower=0)
         # Validate categorical columns
         categorical_cols = [
             col for col in df.columns 
@@ -437,6 +443,11 @@ def load_data():
             if df[col].isnull().any():
                 st.warning(f"Column {col} contains missing values. Filling with most frequent value.")
                 df[col] = df[col].fillna(df[col].mode()[0])
+        # Validate Churn column
+        valid_churn_values = ['Yes', 'No']
+        if not df['Churn'].isin(valid_churn_values).all():
+            st.error("Churn column contains invalid values. Only 'Yes' and 'No' are allowed.")
+            return None
         return df
     except FileNotFoundError:
         st.error("Dataset file 'customer_churn_data.csv' not found. Please ensure the file is in the correct directory.")
@@ -449,8 +460,22 @@ def load_data():
 def preprocess_data(df, model_type='RandomForest'):
     try:
         df_clean = df.copy()
-        # Handle numerical columns
+        # Handle numerical columns (outlier capping)
         numerical_cols = ['tenure', 'MonthlyCharges', 'TotalCharges']
+        for col in numerical_cols:
+            z_scores = stats.zscore(df_clean[col])
+            outliers = (abs(z_scores) > 3)
+            if outliers.any():
+                st.warning(f"Outliers detected in {col}. Capping at 3 standard deviations.")
+                median = df_clean[col].median()
+                std = df_clean[col].std()
+                df_clean[col] = df_clean[col].clip(lower=median - 3*std, upper=median + 3*std)
+        
+        # Feature engineering
+        df_clean['Tenure_MonthlyCharges'] = df_clean['tenure'] * df_clean['MonthlyCharges']
+        numerical_cols.append('Tenure_MonthlyCharges')
+        
+        # Scale numerical features for LogisticRegression
         scaler = StandardScaler()
         if model_type == 'LogisticRegression':
             df_clean[numerical_cols] = scaler.fit_transform(df_clean[numerical_cols])
@@ -476,37 +501,66 @@ def preprocess_data(df, model_type='RandomForest'):
             ohe_dict['encoder'] = ohe
             ohe_dict['columns'] = categorical_cols
         
-        return df_clean, le_dict, ohe_dict, scaler
+        return df_clean, le_dict, ohe_dict, scaler, numerical_cols
     except Exception as e:
         st.error(f"Error in preprocessing: {e}. Please check data consistency.")
-        return None, None, None, None
+        return None, None, None, None, None
 
 # Train model
 def train_model(X, y, model_type='RandomForest', n_estimators=100, max_depth=None):
     try:
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+        # Apply SMOTE for class imbalance
+        smote = SMOTE(random_state=42)
+        X_resampled, y_resampled = smote.fit_resample(X, y)
+        st.write(f"Applied SMOTE: New class distribution - {pd.Series(y_resampled).value_counts().to_dict()}")
+        
+        X_train, X_test, y_train, y_test = train_test_split(X_resampled, y_resampled, test_size=0.3, random_state=42)
+        
+        # Hyperparameter tuning
         if model_type == 'RandomForest':
-            model = RandomForestClassifier(
-                n_estimators=n_estimators, 
-                max_depth=max_depth, 
-                random_state=42, 
-                n_jobs=-1,
-                class_weight='balanced'
-            )
+            param_grid = {
+                'n_estimators': [50, 100, 150],
+                'max_depth': [None, 10, 20],
+                'min_samples_split': [2, 5]
+            }
+            model = RandomForestClassifier(random_state=42, n_jobs=-1, class_weight='balanced')
+            grid_search = GridSearchCV(model, param_grid, cv=5, scoring='f1', n_jobs=-1)
+            grid_search.fit(X_train, y_train)
+            model = grid_search.best_estimator_
+            st.write(f"Best RandomForest Parameters: {grid_search.best_params_}")
         else:
-            model = LogisticRegression(
-                max_iter=1000, 
-                random_state=42, 
-                class_weight='balanced'
-            )
-        # Perform cross-validation
-        cv_scores = cross_val_score(model, X, y, cv=5, scoring='f1')
+            param_grid = {
+                'C': [0.01, 0.1, 1, 10],
+                'solver': ['lbfgs', 'liblinear']
+            }
+            model = LogisticRegression(max_iter=1000, random_state=42, class_weight='balanced')
+            grid_search = GridSearchCV(model, param_grid, cv=5, scoring='f1', n_jobs=-1)
+            grid_search.fit(X_train, y_train)
+            model = grid_search.best_estimator_
+            st.write(f"Best LogisticRegression Parameters: {grid_search.best_params_}")
+        
+        # Cross-validation
+        cv_scores = cross_val_score(model, X_resampled, y_resampled, cv=5, scoring='f1')
         st.write(f"Cross-Validation F1 Scores: {cv_scores.mean():.2f} ± {cv_scores.std():.2f}")
+        
         model.fit(X_train, y_train)
         y_pred = model.predict(X_test)
         y_prob = model.predict_proba(X_test)[:, 1]
         roc_auc = roc_auc_score(y_test, y_prob)
         st.write(f"ROC-AUC Score: {roc_auc:.2f}")
+        
+        # Precision-Recall Curve
+        precision, recall, _ = precision_recall_curve(y_test, y_prob)
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=recall, y=precision, mode='lines', name='Precision-Recall Curve'))
+        fig.update_layout(
+            title="Precision-Recall Curve",
+            xaxis_title="Recall",
+            yaxis_title="Precision",
+            template='plotly_dark'
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        
         return model, X_test, y_test, y_pred
     except Exception as e:
         st.error(f"Error training model: {e}. Please check feature data.")
@@ -1018,6 +1072,11 @@ if df is not None:
         st.markdown('</div>', unsafe_allow_html=True)
 
         st.markdown('<div class="chart-card">', unsafe_allow_html=True)
+        st.write("### Churn Distribution")
+        st.write(filtered_df['Churn'].value_counts(normalize=True))
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        st.markdown('<div class="chart-card">', unsafe_allow_html=True)
         st.write("### Column Descriptions")
         st.markdown("""
         - **customerID**: Unique identifier for each customer.
@@ -1035,7 +1094,7 @@ if df is not None:
         - **PaymentMethod**: Payment method (Electronic check, Mailed check, Bank transfer, Credit card).
         - **MonthlyCharges**: Monthly charges incurred by the customer.
         - **TotalCharges**: Total charges incurred by the customer.
-        - **Churn**: Whether the customer churned (Yes, No).
+        - **Churn**: Whether the customer churned (Yes/No).
         """)
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -1173,11 +1232,11 @@ if df is not None:
         st.markdown('<p class="main-header">Churn Prediction Model</p>', unsafe_allow_html=True)
         
         with st.spinner("Preprocessing data..."):
-            df_clean, le_dict, ohe_dict, scaler = preprocess_data(df, model_type)
+            df_clean, le_dict, ohe_dict, scaler, numerical_cols = preprocess_data(df, model_type)
         
         if df_clean is not None:
             X = df_clean.drop(['customerID', 'Churn'], axis=1)
-            y = df_clean['Churn']
+            y = LabelEncoder().fit_transform(df_clean['Churn'])  # Encode Churn: Yes=1, No=0
             
             st.markdown('<div class="filter-container">', unsafe_allow_html=True)
             model_type = st.selectbox(
@@ -1267,10 +1326,11 @@ if df is not None:
                 with st.form("prediction_form"):
                     cols = st.columns(4)
                     inputs = {}
-                    for i, col in enumerate(X.columns):
+                    input_cols = [col for col in df.columns if col not in ['customerID', 'Churn']]
+                    for i, col in enumerate(input_cols):
                         with cols[i % 4]:
                             if col in le_dict or col in (ohe_dict.get('columns', []) if ohe_dict else []):
-                                unique_vals = list(df[col].unique()) if col in df.columns else []
+                                unique_vals = list(df[col].unique())
                                 inputs[col] = st.selectbox(
                                     f"{col}",
                                     unique_vals,
@@ -1278,9 +1338,9 @@ if df is not None:
                                     key=f"pred_{col}"
                                 )
                             else:
-                                min_val = float(df[col].min()) if col in df.columns else 0.0
-                                max_val = float(df[col].max()) if col in df.columns else 1000.0
-                                avg_val = float(df[col].mean()) if col in df.columns else 0.0
+                                min_val = float(df[col].min())
+                                max_val = float(df[col].max())
+                                avg_val = float(df[col].mean())
                                 inputs[col] = st.number_input(
                                     f"{col}",
                                     min_value=min_val,
@@ -1305,6 +1365,8 @@ if df is not None:
                                         if col in ['MonthlyCharges', 'TotalCharges'] and input_data[col].iloc[0] <= 0:
                                             st.error(f"{col} must be positive.")
                                             st.stop()
+                                # Add interaction feature
+                                input_data['Tenure_MonthlyCharges'] = input_data['tenure'] * input_data['MonthlyCharges']
                                 # Preprocess input data
                                 if model_type == 'RandomForest':
                                     for col in le_dict:
@@ -1324,7 +1386,6 @@ if df is not None:
                                         input_data = input_data.drop(ohe_dict['columns'], axis=1)
                                         input_data = pd.concat([input_data, ohe_df], axis=1)
                                     if scaler is not None:
-                                        numerical_cols = ['tenure', 'MonthlyCharges', 'TotalCharges']
                                         input_data[numerical_cols] = scaler.transform(input_data[numerical_cols])
                                 # Ensure input_data matches X_test columns
                                 for col in X_test.columns:
