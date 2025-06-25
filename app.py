@@ -3,11 +3,11 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
-from sklearn.preprocessing import LabelEncoder
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+from sklearn.preprocessing import LabelEncoder, StandardScaler, OneHotEncoder
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, roc_auc_score
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -421,6 +421,14 @@ def load_data():
         if missing_cols:
             st.error(f"Missing columns: {', '.join(missing_cols)}. Please ensure the dataset contains all required columns.")
             return None
+        # Validate numerical columns
+        numerical_cols = ['tenure', 'MonthlyCharges', 'TotalCharges']
+        for col in numerical_cols:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+            if df[col].isnull().any():
+                st.warning(f"Column {col} contains missing or invalid values. Imputing with median.")
+                df[col] = df[col].fillna(df[col].median())
+        # Validate categorical columns
         categorical_cols = [
             col for col in df.columns 
             if col in EXPECTED_COLUMNS and col != 'customerID' and df[col].dtype == 'object'
@@ -438,37 +446,67 @@ def load_data():
         return None
 
 # Preprocess data
-def preprocess_data(df):
+def preprocess_data(df, model_type='RandomForest'):
     try:
         df_clean = df.copy()
-        df_clean['TotalCharges'] = pd.to_numeric(df_clean['TotalCharges'], errors='coerce')
-        if df_clean['TotalCharges'].isnull().any():
-            st.warning("Found missing or invalid values in TotalCharges. Imputing with median.")
-            df_clean['TotalCharges'] = df_clean['TotalCharges'].fillna(df_clean['TotalCharges'].median())
+        # Handle numerical columns
+        numerical_cols = ['tenure', 'MonthlyCharges', 'TotalCharges']
+        scaler = StandardScaler()
+        if model_type == 'LogisticRegression':
+            df_clean[numerical_cols] = scaler.fit_transform(df_clean[numerical_cols])
+        
         le_dict = {}
+        ohe_dict = {}
         categorical_cols = [
             col for col in df_clean.columns 
             if col in EXPECTED_COLUMNS and col != 'customerID' and df_clean[col].dtype == 'object'
         ]
-        for col in categorical_cols:
-            le = LabelEncoder()
-            df_clean[col] = le.fit_transform(df_clean[col].astype(str))
-            le_dict[col] = le
-        return df_clean, le_dict
+        if model_type == 'RandomForest':
+            for col in categorical_cols:
+                le = LabelEncoder()
+                df_clean[col] = le.fit_transform(df_clean[col].astype(str))
+                le_dict[col] = le
+        else:
+            ohe = OneHotEncoder(sparse=False, handle_unknown='ignore')
+            ohe_data = ohe.fit_transform(df_clean[categorical_cols])
+            ohe_cols = ohe.get_feature_names_out(categorical_cols)
+            ohe_df = pd.DataFrame(ohe_data, columns=ohe_cols, index=df_clean.index)
+            df_clean = df_clean.drop(categorical_cols, axis=1)
+            df_clean = pd.concat([df_clean, ohe_df], axis=1)
+            ohe_dict['encoder'] = ohe
+            ohe_dict['columns'] = categorical_cols
+        
+        return df_clean, le_dict, ohe_dict, scaler
     except Exception as e:
         st.error(f"Error in preprocessing: {e}. Please check data consistency.")
-        return None, None
+        return None, None, None, None
 
 # Train model
 def train_model(X, y, model_type='RandomForest', n_estimators=100, max_depth=None):
     try:
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
         if model_type == 'RandomForest':
-            model = RandomForestClassifier(n_estimators=n_estimators, max_depth=max_depth, random_state=42, n_jobs=-1)
+            model = RandomForestClassifier(
+                n_estimators=n_estimators, 
+                max_depth=max_depth, 
+                random_state=42, 
+                n_jobs=-1,
+                class_weight='balanced'
+            )
         else:
-            model = LogisticRegression(max_iter=1000, random_state=42)
+            model = LogisticRegression(
+                max_iter=1000, 
+                random_state=42, 
+                class_weight='balanced'
+            )
+        # Perform cross-validation
+        cv_scores = cross_val_score(model, X, y, cv=5, scoring='f1')
+        st.write(f"Cross-Validation F1 Scores: {cv_scores.mean():.2f} ± {cv_scores.std():.2f}")
         model.fit(X_train, y_train)
         y_pred = model.predict(X_test)
+        y_prob = model.predict_proba(X_test)[:, 1]
+        roc_auc = roc_auc_score(y_test, y_prob)
+        st.write(f"ROC-AUC Score: {roc_auc:.2f}")
         return model, X_test, y_test, y_pred
     except Exception as e:
         st.error(f"Error training model: {e}. Please check feature data.")
@@ -508,6 +546,16 @@ def generate_analysis_report(df, model=None, X_test=None, y_test=None, y_pred=No
     for service in internet_churn.index:
         churn_pct = internet_churn.loc[service].get('Yes', 0) * 100
         report.append(f"- {service}: {churn_pct:.1f}% churn")
+    
+    # Additional Segment Analysis
+    report.append("\nSegment Analysis")
+    report.append("-" * 20)
+    for col in ['gender', 'SeniorCitizen', 'PaymentMethod']:
+        segment_churn = df.groupby(col)['Churn'].value_counts(normalize=True).unstack().fillna(0)
+        report.append(f"Churn by {col}:")
+        for segment in segment_churn.index:
+            churn_pct = segment_churn.loc[segment].get('Yes', 0) * 100
+            report.append(f"- {segment}: {churn_pct:.1f}% churn")
     report.append("")
     
     # Model Performance
@@ -516,6 +564,7 @@ def generate_analysis_report(df, model=None, X_test=None, y_test=None, y_pred=No
         report.append("-" * 20)
         report.append(f"Model Type: {model_type}")
         report.append(f"Accuracy: {accuracy_score(y_test, y_pred):.2f}")
+        report.append(f"ROC-AUC: {roc_auc_score(y_test, model.predict_proba(X_test)[:, 1]):.2f}")
         report.append("\nClassification Report:")
         report.append(classification_report(y_test, y_pred, target_names=['No Churn', 'Churn']))
         
@@ -527,6 +576,14 @@ def generate_analysis_report(df, model=None, X_test=None, y_test=None, y_pred=No
             report.append("\nFeature Importance (Top 5):")
             for i, row in feature_importance.head(5).iterrows():
                 report.append(f"- {row['feature']}: {row['importance']:.3f}")
+        elif model_type == 'LogisticRegression':
+            coefficients = pd.DataFrame({
+                'feature': X_test.columns,
+                'coefficient': model.coef_[0]
+            }).sort_values(by='coefficient', ascending=False, key=abs)
+            report.append("\nFeature Coefficients (Top 5):")
+            for i, row in coefficients.head(5).iterrows():
+                report.append(f"- {row['feature']}: {row['coefficient']:.3f}")
     
     report.append("\nGenerated by Churn Analytics Dashboard")
     report.append(f"Date: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -734,7 +791,7 @@ if df is not None:
             """, unsafe_allow_html=True)
         with col2:
             st.markdown(f"""
-              <div class="metric-box">
+                <div class="metric-box">
                     <h3>{total_customers:,}</h3>
                     <p>Total Customers Count</p>
                 </div>
@@ -1116,7 +1173,7 @@ if df is not None:
         st.markdown('<p class="main-header">Churn Prediction Model</p>', unsafe_allow_html=True)
         
         with st.spinner("Preprocessing data..."):
-            df_clean, le_dict = preprocess_data(df)
+            df_clean, le_dict, ohe_dict, scaler = preprocess_data(df, model_type)
         
         if df_clean is not None:
             X = df_clean.drop(['customerID', 'Churn'], axis=1)
@@ -1184,6 +1241,24 @@ if df is not None:
                     fig.update_layout(title_x=0.5, margin=dict(t=50, b=20))
                     st.plotly_chart(fig, use_container_width=True)
                     st.markdown('</div>', unsafe_allow_html=True)
+                else:
+                    st.markdown('<p class="sub-header">Feature Coefficients</p>', unsafe_allow_html=True)
+                    st.markdown('<div class="chart-card">', unsafe_allow_html=True)
+                    coefficients = pd.DataFrame({
+                        'feature': X.columns,
+                        'coefficient': model.coef_[0]
+                    }).sort_values(by='coefficient', ascending=False, key=abs)
+                    fig = px.bar(
+                        coefficients,
+                        x='coefficient',
+                        y='feature',
+                        title="Feature Coefficients",
+                        color_discrete_sequence=['#2DD4BF'],
+                        template='plotly_dark'
+                    )
+                    fig.update_layout(title_x=0.5, margin=dict(t=50, b=20))
+                    st.plotly_chart(fig, use_container_width=True)
+                    st.markdown('</div>', unsafe_allow_html=True)
                 
                 st.markdown('<p class="sub-header">Predict Churn for a Single Customer</p>', unsafe_allow_html=True)
                 st.markdown('<div class="filter-container">', unsafe_allow_html=True)
@@ -1194,8 +1269,8 @@ if df is not None:
                     inputs = {}
                     for i, col in enumerate(X.columns):
                         with cols[i % 4]:
-                            if col in le_dict:
-                                unique_vals = list(df[col].unique())
+                            if col in le_dict or col in (ohe_dict.get('columns', []) if ohe_dict else []):
+                                unique_vals = list(df[col].unique()) if col in df.columns else []
                                 inputs[col] = st.selectbox(
                                     f"{col}",
                                     unique_vals,
@@ -1203,9 +1278,9 @@ if df is not None:
                                     key=f"pred_{col}"
                                 )
                             else:
-                                min_val = float(df[col].min())
-                                max_val = float(df[col].max())
-                                avg_val = float(df[col].mean())
+                                min_val = float(df[col].min()) if col in df.columns else 0.0
+                                max_val = float(df[col].max()) if col in df.columns else 1000.0
+                                avg_val = float(df[col].mean()) if col in df.columns else 0.0
                                 inputs[col] = st.number_input(
                                     f"{col}",
                                     min_value=min_val,
@@ -1221,13 +1296,41 @@ if df is not None:
                         with st.spinner("Making prediction..."):
                             input_data = pd.DataFrame([inputs])
                             try:
-                                for col in le_dict:
+                                # Validate numerical inputs
+                                for col in ['tenure', 'MonthlyCharges', 'TotalCharges']:
                                     if col in input_data.columns:
-                                        if input_data[col].iloc[0] in le_dict[col].classes_:
-                                            input_data[col] = le_dict[col].transform([input_data[col].iloc[0]])[0]
-                                        else:
-                                            st.error(f"Value '{input_data[col].iloc[0]}' in {col} is not recognized. Please select a valid option.")
+                                        if input_data[col].iloc[0] < 0:
+                                            st.error(f"{col} cannot be negative.")
                                             st.stop()
+                                        if col in ['MonthlyCharges', 'TotalCharges'] and input_data[col].iloc[0] <= 0:
+                                            st.error(f"{col} must be positive.")
+                                            st.stop()
+                                # Preprocess input data
+                                if model_type == 'RandomForest':
+                                    for col in le_dict:
+                                        if col in input_data.columns:
+                                            if input_data[col].iloc[0] in le_dict[col].classes_:
+                                                input_data[col] = le_dict[col].transform([input_data[col].iloc[0]])[0]
+                                            else:
+                                                st.error(f"Value '{input_data[col].iloc[0]}' in {col} is not recognized. Please select a valid option.")
+                                                st.stop()
+                                else:
+                                    if ohe_dict:
+                                        ohe = ohe_dict['encoder']
+                                        cat_data = input_data[ohe_dict['columns']]
+                                        ohe_data = ohe.transform(cat_data)
+                                        ohe_cols = ohe.get_feature_names_out(ohe_dict['columns'])
+                                        ohe_df = pd.DataFrame(ohe_data, columns=ohe_cols, index=input_data.index)
+                                        input_data = input_data.drop(ohe_dict['columns'], axis=1)
+                                        input_data = pd.concat([input_data, ohe_df], axis=1)
+                                    if scaler is not None:
+                                        numerical_cols = ['tenure', 'MonthlyCharges', 'TotalCharges']
+                                        input_data[numerical_cols] = scaler.transform(input_data[numerical_cols])
+                                # Ensure input_data matches X_test columns
+                                for col in X_test.columns:
+                                    if col not in input_data.columns:
+                                        input_data[col] = 0
+                                input_data = input_data[X_test.columns]
                                 prediction = model.predict(input_data)
                                 prob = model.predict_proba(input_data)[0]
                                 st.markdown('<div class="metric-box">', unsafe_allow_html=True)
@@ -1235,7 +1338,7 @@ if df is not None:
                                 st.write(f"**Churn Probability**: {prob[1]:.2%}")
                                 st.markdown('</div>', unsafe_allow_html=True)
                             except Exception as e:
-                                st.error(f"Prediction error: {e}. Please check input data.")
+                                st.error(f"Prediction error: {e}. Please ensure all inputs are valid and match the dataset structure.")
                 st.markdown('</div>', unsafe_allow_html=True)
 else:
     st.markdown('<div class="metric-box">', unsafe_allow_html=True)
