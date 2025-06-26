@@ -8,7 +8,6 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
-from imblearn.over_sampling import SMOTE  # Added for handling imbalanced data
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -460,15 +459,10 @@ def preprocess_data(df):
         st.error(f"Error in preprocessing: {e}. Please check data consistency.")
         return None, None
 
-# Train model with SMOTE
+# Train model
 def train_model(X, y, model_type='RandomForest', n_estimators=100, max_depth=None):
     try:
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
-        
-        # Apply SMOTE to balance the training data
-        smote = SMOTE(random_state=42, k_neighbors=5)
-        X_train, y_train = smote.fit_resample(X_train, y_train)
-        
         if model_type == 'RandomForest':
             model = RandomForestClassifier(n_estimators=n_estimators, max_depth=max_depth, random_state=42, n_jobs=-1)
         else:
@@ -477,7 +471,7 @@ def train_model(X, y, model_type='RandomForest', n_estimators=100, max_depth=Non
         y_pred = model.predict(X_test)
         return model, X_test, y_test, y_pred
     except Exception as e:
-        st.error(f"Error training model: {e}. Please check feature data or SMOTE compatibility.")
+        st.error(f"Error training model: {e}. Please check feature data.")
         return None, None, None, None
 
 # Generate analysis report
@@ -704,7 +698,7 @@ if df is not None:
         st.markdown("""
             <div class="hero-section">
                 <h1 class="main-header">Customer Churn Analysis Dashboard</h1>
-                <p class="hero-text">
+                <p class="hero-text" style="text-align: center;">
                     A comprehensive platform for analyzing customer behavior, identifying churn drivers, and predicting at-risk customers to inform strategic retention efforts.
                 </p>
             </div>
@@ -740,7 +734,7 @@ if df is not None:
             """, unsafe_allow_html=True)
         with col2:
             st.markdown(f"""
-                <div class="metric-box">
+              <div class="metric-box">
                     <h3>{total_customers:,}</h3>
                     <p>Total Customers Count</p>
                 </div>
@@ -1295,3 +1289,4 @@ else:
                 <p>Powered by <a href="https://felido01.github.io/felixidowu01/intro.html" target="_blank">Felixidowu</a></p>
             </div>
         """, unsafe_allow_html=True)
+
