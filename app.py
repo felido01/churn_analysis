@@ -8,6 +8,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+from imblearn.over_sampling import SMOTE  # Added for handling imbalanced data
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -459,10 +460,15 @@ def preprocess_data(df):
         st.error(f"Error in preprocessing: {e}. Please check data consistency.")
         return None, None
 
-# Train model
+# Train model with SMOTE
 def train_model(X, y, model_type='RandomForest', n_estimators=100, max_depth=None):
     try:
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+        
+        # Apply SMOTE to balance the training data
+        smote = SMOTE(random_state=42, k_neighbors=5)
+        X_train, y_train = smote.fit_resample(X_train, y_train)
+        
         if model_type == 'RandomForest':
             model = RandomForestClassifier(n_estimators=n_estimators, max_depth=max_depth, random_state=42, n_jobs=-1)
         else:
@@ -471,7 +477,7 @@ def train_model(X, y, model_type='RandomForest', n_estimators=100, max_depth=Non
         y_pred = model.predict(X_test)
         return model, X_test, y_test, y_pred
     except Exception as e:
-        st.error(f"Error training model: {e}. Please check feature data.")
+        st.error(f"Error training model: {e}. Please check feature data or SMOTE compatibility.")
         return None, None, None, None
 
 # Generate analysis report
@@ -734,7 +740,7 @@ if df is not None:
             """, unsafe_allow_html=True)
         with col2:
             st.markdown(f"""
-              <div class="metric-box">
+                <div class="metric-box">
                     <h3>{total_customers:,}</h3>
                     <p>Total Customers Count</p>
                 </div>
@@ -994,7 +1000,7 @@ if df is not None:
         st.markdown('</div>', unsafe_allow_html=True)
 
     # Exploratory Data Analysis
-    elif st.session_state.page == "EDA":
+    elif st.session_state.page acuerda:
         st.markdown('<p class="main-header">Exploratory Data Analysis</p>', unsafe_allow_html=True)
         
         st.markdown('<div class="filter-container"><h4>Filter Data</h4></div>', unsafe_allow_html=True)
