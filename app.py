@@ -1000,7 +1000,7 @@ if df is not None:
         st.markdown('</div>', unsafe_allow_html=True)
 
     # Exploratory Data Analysis
-    elif st.session_state.page acuerda:
+    elif st.session_state.page == "EDA":
         st.markdown('<p class="main-header">Exploratory Data Analysis</p>', unsafe_allow_html=True)
         
         st.markdown('<div class="filter-container"><h4>Filter Data</h4></div>', unsafe_allow_html=True)
