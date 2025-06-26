@@ -698,7 +698,7 @@ if df is not None:
         st.markdown("""
             <div class="hero-section">
                 <h1 class="main-header">Customer Churn Analysis Dashboard</h1>
-                <p class="hero-text" style="text-align: center;">
+                <p class="hero-text">
                     A comprehensive platform for analyzing customer behavior, identifying churn drivers, and predicting at-risk customers to inform strategic retention efforts.
                 </p>
             </div>
@@ -1289,4 +1289,3 @@ else:
                 <p>Powered by <a href="https://felido01.github.io/felixidowu01/intro.html" target="_blank">Felixidowu</a></p>
             </div>
         """, unsafe_allow_html=True)
-
