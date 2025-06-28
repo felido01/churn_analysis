@@ -443,6 +443,22 @@ def load_data():
 def preprocess_data(df):
     try:
         df_clean = df.copy()
+        
+        # Validate dataset
+        missing_cols = [col for col in EXPECTED_COLUMNS if col not in df_clean.columns]
+        if missing_cols:
+            st.error(f"Missing columns: {', '.join(missing_cols)}. Please ensure the dataset contains all required columns.")
+            return None, None
+        
+        # Display dataset info for debugging
+        st.markdown('<div class="chart-card">', unsafe_allow_html=True)
+        st.write("**Dataset Validation**:")
+        st.write(f"Rows: {df_clean.shape[0]:,}")
+        st.write(f"Columns: {df_clean.shape[1]}")
+        st.write(f"Missing values: {df_clean.isnull().sum().sum()}")
+        st.write(f"Churn distribution: {df_clean['Churn'].value_counts(normalize=True).to_dict()}")
+        st.markdown('</div>', unsafe_allow_html=True)
+
         # Convert TotalCharges to numeric, fill missing with median
         df_clean['TotalCharges'] = pd.to_numeric(df_clean['TotalCharges'], errors='coerce')
         if df_clean['TotalCharges'].isnull().any():
@@ -452,13 +468,20 @@ def preprocess_data(df):
         # Feature engineering
         # Charges per month
         df_clean['ChargesPerMonth'] = df_clean['TotalCharges'] / (df_clean['tenure'] + 1)  # Avoid division by zero
-        df_clean['ChargesPerMonth'] = df_clean['ChargesPerMonth'].fillna(df_clean['ChargesPerMonth'].median())
+        if df_clean['ChargesPerMonth'].isnull().any():
+            st.warning("Found missing values in ChargesPerMonth. Imputing with median.")
+            df_clean['ChargesPerMonth'] = df_clean['ChargesPerMonth'].fillna(df_clean['ChargesPerMonth'].median())
+        
         # Count of subscribed services
         service_cols = ['PhoneService', 'MultipleLines', 'InternetService', 'OnlineSecurity', 'OnlineBackup', 
                         'DeviceProtection', 'TechSupport', 'StreamingTV', 'StreamingMovies']
-        df_clean['ServiceCount'] = df_clean[service_cols].apply(lambda x: sum(x == 'Yes' if col != 'InternetService' 
-                                                                             else x in ['DSL', 'Fiber optic'] 
-                                                                             for col in service_cols), axis=1)
+        missing_services = [col for col in service_cols if col not in df_clean.columns]
+        if missing_services:
+            st.error(f"Missing service columns: {', '.join(missing_services)}. Cannot compute ServiceCount.")
+            return None, None
+        df_clean['ServiceCount'] = df_clean[service_cols].apply(
+            lambda x: sum(x == 'Yes' if col != 'InternetService' else x in ['DSL', 'Fiber optic'] 
+                         for col in service_cols), axis=1)
 
         # Handle outliers in numerical columns
         numerical_cols = ['tenure', 'MonthlyCharges', 'TotalCharges', 'ChargesPerMonth', 'ServiceCount']
@@ -468,6 +491,9 @@ def preprocess_data(df):
                 iqr = q3 - q1
                 lower_bound, upper_bound = q1 - 1.5 * iqr, q3 + 1.5 * iqr
                 df_clean[col] = df_clean[col].clip(lower=lower_bound, upper=upper_bound)
+            else:
+                st.error(f"Column {col} missing after preprocessing. Please check dataset.")
+                return None, None
 
         # Encode Churn column
         churn_encoder = LabelEncoder()
@@ -482,6 +508,10 @@ def preprocess_data(df):
             col for col in df_clean.columns 
             if col in EXPECTED_COLUMNS and col not in ['customerID', 'Churn'] and df_clean[col].dtype == 'object'
         ]
+        for col in categorical_cols:
+            if df_clean[col].isnull().any():
+                st.warning(f"Column {col} contains missing values. Filling with most frequent value.")
+                df_clean[col] = df_clean[col].fillna(df_clean[col].mode()[0])
         df_clean = pd.get_dummies(df_clean, columns=categorical_cols, drop_first=True)
 
         # Scale numerical features
@@ -505,20 +535,19 @@ def preprocess_data(df):
     except Exception as e:
         st.error(f"Error in preprocessing: {e}. Please check data consistency.")
         return None, None
-
+        
 # train model
 def train_model(X, y, model_type='XGBoost', n_estimators=100, max_depth=5, learning_rate=0.1):
     try:
-        # Apply SMOTE to handle class imbalance
-        smote = SMOTE(random_state=42, sampling_strategy=1.0)
-        X_resampled, y_resampled = smote.fit_resample(X, y)
-        X_train, X_test, y_train, y_test = train_test_split(X_resampled, y_resampled, test_size=0.3, random_state=42, stratify=y_resampled)
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42, stratify=y)
+        scale_pos_weight = (y == 0).sum() / (y == 1).sum() if (y == 1).sum() > 0 else 1
 
         if model_type == 'XGBoost':
             model = xgb.XGBClassifier(
                 n_estimators=n_estimators,
                 max_depth=max_depth,
                 learning_rate=learning_rate,
+                scale_pos_weight=scale_pos_weight,
                 random_state=42,
                 n_jobs=-1,
                 eval_metric='logloss'
@@ -531,7 +560,7 @@ def train_model(X, y, model_type='XGBoost', n_estimators=100, max_depth=5, learn
             grid_search = GridSearchCV(
                 estimator=model,
                 param_grid=param_grid,
-                scoring='f1',  # Optimize for F1-score due to imbalance
+                scoring='f1',  # Optimize for F1-score
                 cv=3,
                 n_jobs=-1,
                 error_score='raise'
@@ -545,7 +574,7 @@ def train_model(X, y, model_type='XGBoost', n_estimators=100, max_depth=5, learn
                 model.fit(X_train, y_train)
         elif model_type == 'Stacking':
             estimators = [
-                ('xgb', xgb.XGBClassifier(n_estimators=100, max_depth=5, learning_rate=0.1, random_state=42)),
+                ('xgb', xgb.XGBClassifier(n_estimators=100, max_depth=5, learning_rate=0.1, scale_pos_weight=scale_pos_weight, random_state=42)),
                 ('rf', RandomForestClassifier(n_estimators=100, max_depth=10, random_state=42))
             ]
             model = StackingClassifier(
@@ -684,6 +713,7 @@ with st.sidebar.expander("Quick Filters", expanded=False):
     if st.button("Reset Filters", key="reset_filters"):
         st.session_state.quick_filter = None
         st.rerun()
+
 
 
 # Model Parameters
