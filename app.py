@@ -457,13 +457,13 @@ def preprocess_data(df):
         df_clean['ChargesPerMonth'] = df_clean['TotalCharges'] / (df_clean['tenure'] + 1)  # Avoid division by zero
         df_clean['ChargesPerMonth'] = df_clean['ChargesPerMonth'].fillna(df_clean['ChargesPerMonth'].median())
         
-        # Count of subscribed services
+        # Count of subscribed services - CORRECTED VERSION
         service_cols = ['PhoneService', 'MultipleLines', 'InternetService', 'OnlineSecurity', 'OnlineBackup', 
                        'DeviceProtection', 'TechSupport', 'StreamingTV', 'StreamingMovies']
         df_clean['ServiceCount'] = df_clean.apply(lambda row: sum(
-            1 for col in service_cols 
-            if (row[col] == 'Yes' if col != 'InternetService' else row[col] in ['DSL', 'Fiber optic'])
-        , axis=1)
+            (1 for col in service_cols 
+             if (row[col] == 'Yes' if col != 'InternetService' else row[col] in ['DSL', 'Fiber optic']))
+        ), axis=1)
 
         # Handle outliers in numerical columns
         numerical_cols = ['tenure', 'MonthlyCharges', 'TotalCharges', 'ChargesPerMonth', 'ServiceCount']
@@ -477,7 +477,7 @@ def preprocess_data(df):
         churn_encoder = LabelEncoder()
         df_clean['ChurnEncoded'] = churn_encoder.fit_transform(df_clean['Churn'].astype(str))
 
-        # Handle categorical columns with one-hot encoding, excluding customerID and Churn
+        # Handle categorical columns with one-hot encoding
         categorical_cols = [
             col for col in df_clean.columns 
             if col in EXPECTED_COLUMNS and col not in ['customerID', 'Churn'] and df_clean[col].dtype == 'object'
