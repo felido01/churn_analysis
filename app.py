@@ -1,16 +1,15 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import xgboost as xgb
-from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import GridSearchCV
 import plotly.express as px
 import plotly.graph_objects as go
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.ensemble import RandomForestClassifier, StackingClassifier
 from sklearn.linear_model import LogisticRegression
-from sklearn.preprocessing import LabelEncoder
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, f1_score, roc_auc_score
+import xgboost as xgb
+from imblearn.over_sampling import SMOTE
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -441,8 +440,6 @@ def load_data():
         return None
 
 # Preprocess data
-
-
 def preprocess_data(df):
     try:
         df_clean = df.copy()
@@ -451,6 +448,26 @@ def preprocess_data(df):
         if df_clean['TotalCharges'].isnull().any():
             st.warning("Found missing or invalid values in TotalCharges. Imputing with median.")
             df_clean['TotalCharges'] = df_clean['TotalCharges'].fillna(df_clean['TotalCharges'].median())
+
+        # Feature engineering
+        # Charges per month
+        df_clean['ChargesPerMonth'] = df_clean['TotalCharges'] / (df_clean['tenure'] + 1)  # Avoid division by zero
+        df_clean['ChargesPerMonth'] = df_clean['ChargesPerMonth'].fillna(df_clean['ChargesPerMonth'].median())
+        # Count of subscribed services
+        service_cols = ['PhoneService', 'MultipleLines', 'InternetService', 'OnlineSecurity', 'OnlineBackup', 
+                        'DeviceProtection', 'TechSupport', 'StreamingTV', 'StreamingMovies']
+        df_clean['ServiceCount'] = df_clean[service_cols].apply(lambda x: sum(x == 'Yes' if col != 'InternetService' 
+                                                                             else x in ['DSL', 'Fiber optic'] 
+                                                                             for col in service_cols), axis=1)
+
+        # Handle outliers in numerical columns
+        numerical_cols = ['tenure', 'MonthlyCharges', 'TotalCharges', 'ChargesPerMonth', 'ServiceCount']
+        for col in numerical_cols:
+            if col in df_clean.columns:
+                q1, q3 = df_clean[col].quantile([0.25, 0.75])
+                iqr = q3 - q1
+                lower_bound, upper_bound = q1 - 1.5 * iqr, q3 + 1.5 * iqr
+                df_clean[col] = df_clean[col].clip(lower=lower_bound, upper=upper_bound)
 
         # Encode Churn column
         churn_encoder = LabelEncoder()
@@ -468,7 +485,6 @@ def preprocess_data(df):
         df_clean = pd.get_dummies(df_clean, columns=categorical_cols, drop_first=True)
 
         # Scale numerical features
-        numerical_cols = ['tenure', 'MonthlyCharges', 'TotalCharges']
         scaler = StandardScaler()
         if all(col in df_clean.columns for col in numerical_cols):
             df_clean[numerical_cols] = scaler.fit_transform(df_clean[numerical_cols])
@@ -481,53 +497,64 @@ def preprocess_data(df):
             'scaler': scaler,
             'numerical_cols': numerical_cols,
             'categorical_cols': categorical_cols,
-            'churn_encoder': churn_encoder
+            'churn_encoder': churn_encoder,
+            'service_cols': service_cols
         }
         
         return df_clean, feature_dict
     except Exception as e:
         st.error(f"Error in preprocessing: {e}. Please check data consistency.")
         return None, None
-import xgboost as xgb
-from sklearn.model_selection import GridSearchCV
 
-def train_model(X, y, model_type='XGBoost', n_estimators=100, max_depth=6, learning_rate=0.1):
+# train model
+def train_model(X, y, model_type='XGBoost', n_estimators=100, max_depth=5, learning_rate=0.1):
     try:
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42, stratify=y)
-
-        # Calculate scale_pos_weight for class imbalance
-        scale_pos_weight = (y == 0).sum() / (y == 1).sum() if (y == 1).sum() > 0 else 1
+        # Apply SMOTE to handle class imbalance
+        smote = SMOTE(random_state=42, sampling_strategy=1.0)
+        X_resampled, y_resampled = smote.fit_resample(X, y)
+        X_train, X_test, y_train, y_test = train_test_split(X_resampled, y_resampled, test_size=0.3, random_state=42, stratify=y_resampled)
 
         if model_type == 'XGBoost':
             model = xgb.XGBClassifier(
                 n_estimators=n_estimators,
                 max_depth=max_depth,
                 learning_rate=learning_rate,
-                scale_pos_weight=scale_pos_weight,
                 random_state=42,
                 n_jobs=-1,
                 eval_metric='logloss'
             )
-            # Define parameter grid for tuning
             param_grid = {
-                'n_estimators': [50, 100, 200],
-                'max_depth': [3, 6, 9],
-                'learning_rate': [0.01, 0.1, 0.3]
+                'n_estimators': [50, 100],
+                'max_depth': [3, 5],
+                'learning_rate': [0.05, 0.1]
             }
             grid_search = GridSearchCV(
                 estimator=model,
                 param_grid=param_grid,
-                scoring='accuracy',
-                cv=5,
+                scoring='f1',  # Optimize for F1-score due to imbalance
+                cv=3,
                 n_jobs=-1,
-                error_score='raise'  # Raise detailed errors for debugging
+                error_score='raise'
             )
             try:
                 grid_search.fit(X_train, y_train)
                 model = grid_search.best_estimator_
+                st.info(f"Best parameters: {grid_search.best_params_}")
             except Exception as e:
-                st.error(f"GridSearchCV failed: {e}. Falling back to default XGBoost model.")
-                model.fit(X_train, y_train)  # Train with default parameters as fallback
+                st.warning(f"GridSearchCV failed: {e}. Using default XGBoost model.")
+                model.fit(X_train, y_train)
+        elif model_type == 'Stacking':
+            estimators = [
+                ('xgb', xgb.XGBClassifier(n_estimators=100, max_depth=5, learning_rate=0.1, random_state=42)),
+                ('rf', RandomForestClassifier(n_estimators=100, max_depth=10, random_state=42))
+            ]
+            model = StackingClassifier(
+                estimators=estimators,
+                final_estimator=LogisticRegression(max_iter=1000),
+                cv=3,
+                n_jobs=-1
+            )
+            model.fit(X_train, y_train)
         else:
             if model_type == 'RandomForest':
                 model = RandomForestClassifier(n_estimators=n_estimators, max_depth=max_depth, random_state=42, n_jobs=-1)
@@ -583,10 +610,12 @@ def generate_analysis_report(df, model=None, X_test=None, y_test=None, y_pred=No
         report.append("-" * 20)
         report.append(f"Model Type: {model_type}")
         report.append(f"Accuracy: {accuracy_score(y_test, y_pred):.2f}")
+        report.append(f"F1-Score: {f1_score(y_test, y_pred):.2f}")
+        report.append(f"AUC-ROC: {roc_auc_score(y_test, model.predict_proba(X_test)[:, 1]):.2f}")
         report.append("\nClassification Report:")
         report.append(classification_report(y_test, y_pred, target_names=['No Churn', 'Churn']))
         
-        if model_type == 'RandomForest':
+        if model_type in ['XGBoost', 'RandomForest']:
             feature_importance = pd.DataFrame({
                 'feature': X_test.columns,
                 'importance': model.feature_importances_
@@ -656,18 +685,19 @@ with st.sidebar.expander("Quick Filters", expanded=False):
         st.session_state.quick_filter = None
         st.rerun()
 
+
 # Model Parameters
 with st.sidebar.expander("Model Parameters", expanded=False):
     st.markdown("<h4>Adjust Model Settings</h4>", unsafe_allow_html=True)
-    model_type = st.selectbox("Model Type", ["XGBoost", "RandomForest", "LogisticRegression"], key="sidebar_model_type")
+    model_type = st.selectbox("Model Type", ["XGBoost", "RandomForest", "LogisticRegression", "Stacking"], key="sidebar_model_type")
     if model_type == "XGBoost":
         n_estimators = st.slider("Number of Trees", 50, 200, st.session_state.model_params.get('n_estimators', 100), step=10, key="n_estimators_xgb")
-        max_depth = st.slider("Max Depth", 3, 9, st.session_state.model_params.get('max_depth', 6), step=1, key="max_depth_xgb")
-        learning_rate = st.slider("Learning Rate", 0.01, 0.3, st.session_state.model_params.get('learning_rate', 0.1), step=0.01, key="learning_rate_xgb")
+        max_depth = st.slider("Max Depth", 3, 7, st.session_state.model_params.get('max_depth', 5), step=1, key="max_depth_xgb")
+        learning_rate = st.slider("Learning Rate", 0.05, 0.2, st.session_state.model_params.get('learning_rate', 0.1), step=0.01, key="learning_rate_xgb")
         st.session_state.model_params = {'n_estimators': n_estimators, 'max_depth': max_depth, 'learning_rate': learning_rate}
     elif model_type == "RandomForest":
         n_estimators = st.slider("Number of Trees", 50, 200, st.session_state.model_params.get('n_estimators', 100), step=10, key="n_estimators_rf")
-        max_depth = st.slider("Max Depth", 5, 50, st.session_state.model_params.get('max_depth', 10), step=5, key="max_depth_rf")
+        max_depth = st.slider("Max Depth", 5, 20, st.session_state.model_params.get('max_depth', 10), step=5, key="max_depth_rf")
         st.session_state.model_params = {'n_estimators': n_estimators, 'max_depth': max_depth}
     else:
         st.session_state.model_params = {}
@@ -1184,6 +1214,7 @@ if df is not None:
         st.markdown('</div>', unsafe_allow_html=True)
 
       # Churn Prediction
+        # Churn Prediction
     elif st.session_state.page == "Churn Prediction":
         st.markdown('<p class="main-header">Churn Prediction Model</p>', unsafe_allow_html=True)
         
@@ -1201,22 +1232,29 @@ if df is not None:
             X = df_clean.drop(['customerID', 'Churn'], axis=1)
             y = df_clean['Churn']
             
+            # Display class distribution for debugging
+            st.markdown('<div class="chart-card">', unsafe_allow_html=True)
+            st.write("**Class Distribution**:")
+            st.write(f"No Churn (0): {sum(y == 0)} ({100 * sum(y == 0) / len(y):.1f}%)")
+            st.write(f"Churn (1): {sum(y == 1)} ({100 * sum(y == 1) / len(y):.1f}%)")
+            st.markdown('</div>', unsafe_allow_html=True)
+            
             st.markdown('<div class="filter-container">', unsafe_allow_html=True)
             model_type = st.selectbox(
                 "Select Model",
-                ["XGBoost", "RandomForest", "LogisticRegression"],
+                ["XGBoost", "RandomForest", "LogisticRegression", "Stacking"],
                 help="Choose the machine learning model for prediction.",
                 key="model_type_main",
-                index=["XGBoost", "RandomForest", "LogisticRegression"].index(st.session_state.get('sidebar_model_type', 'XGBoost'))
+                index=["XGBoost", "RandomForest", "LogisticRegression", "Stacking"].index(st.session_state.get('sidebar_model_type', 'XGBoost'))
             )
             st.markdown('</div>', unsafe_allow_html=True)
             
             with st.spinner("Training model..."):
-                model_params = st.session_state.get('model judged_params', {})
+                model_params = st.session_state.get('model_params', {})
                 model, X_test, y_test, y_pred = train_model(
                     X, y, model_type,
                     n_estimators=model_params.get('n_estimators', 100),
-                    max_depth=model_params.get('max_depth', 6),
+                    max_depth=model_params.get('max_depth', 5),
                     learning_rate=model_params.get('learning_rate', 0.1)
                 )
             
@@ -1227,6 +1265,8 @@ if df is not None:
                 st.markdown('<p class="sub-header">Model Performance</p>', unsafe_allow_html=True)
                 st.markdown('<div class="chart-card">', unsafe_allow_html=True)
                 st.write(f"**Accuracy**: {accuracy_score(y_test, y_pred):.2f}")
+                st.write(f"**F1-Score**: {f1_score(y_test, y_pred):.2f}")
+                st.write(f"**AUC-ROC**: {roc_auc_score(y_test, model.predict_proba(X_test)[:, 1]):.2f}")
                 st.write("**Classification Report**:")
                 st.text(classification_report(y_test, y_pred, target_names=['No Churn', 'Churn']))
                 st.markdown('</div>', unsafe_allow_html=True)
@@ -1246,7 +1286,7 @@ if df is not None:
                 st.plotly_chart(fig, use_container_width=True)
                 st.markdown('</div>', unsafe_allow_html=True)
                 
-                if model_type == 'XGBoost' or model_type == 'RandomForest':
+                if model_type in ['XGBoost', 'RandomForest']:
                     st.markdown('<p class="sub-header">Feature Importance</p>', unsafe_allow_html=True)
                     st.markdown('<div class="chart-card">', unsafe_allow_html=True)
                     feature_importance = pd.DataFrame({
@@ -1277,9 +1317,9 @@ if df is not None:
                             continue
                         with cols[i % 4]:
                             if col in feature_dict['numerical_cols']:
-                                min_val = float(df[col].min())
-                                max_val = float(df[col].max())
-                                avg_val = float(df[col].mean())
+                                min_val = float(df[col].min()) if col != 'ChargesPerMonth' else float(df['TotalCharges'].div(df['tenure'] + 1).min())
+                                max_val = float(df[col].max()) if col != 'ChargesPerMonth' else float(df['TotalCharges'].div(df['tenure'] + 1).max())
+                                avg_val = float(df[col].mean()) if col != 'ChargesPerMonth' else float(df['TotalCharges'].div(df['tenure'] + 1).mean())
                                 inputs[col] = st.number_input(
                                     f"{col}",
                                     min_value=min_val,
@@ -1296,6 +1336,17 @@ if df is not None:
                                     help=f"Select a value for {col}",
                                     key=f"pred_{col}"
                                 )
+                    
+                    # Add ServiceCount input
+                    with cols[i % 4]:
+                        inputs['ServiceCount'] = st.number_input(
+                            "ServiceCount",
+                            min_value=0.0,
+                            max_value=9.0,
+                            value=3.0,
+                            help="Number of subscribed services (0-9)",
+                            key="input_ServiceCount"
+                        )
                     
                     submit = st.form_submit_button("Predict Churn")
                     
