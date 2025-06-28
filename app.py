@@ -441,6 +441,7 @@ def load_data():
         return None
 
 # Preprocess data
+# Preprocess data
 def preprocess_data(df):
     try:
         df_clean = df.copy()
@@ -450,26 +451,29 @@ def preprocess_data(df):
             st.warning("Found missing or invalid values in TotalCharges. Imputing with median.")
             df_clean['TotalCharges'] = df_clean['TotalCharges'].fillna(df_clean['TotalCharges'].median())
 
-        # Handle categorical columns with one-hot encoding
+        # Handle categorical columns with one-hot encoding, excluding customerID and Churn
         categorical_cols = [
             col for col in df_clean.columns 
-            if col in EXPECTED_COLUMNS and col != 'customerID' and df_clean[col].dtype == 'object'
+            if col in EXPECTED_COLUMNS and col not in ['customerID', 'Churn'] and df_clean[col].dtype == 'object'
         ]
         df_clean = pd.get_dummies(df_clean, columns=categorical_cols, drop_first=True)
 
         # Scale numerical features
         numerical_cols = ['tenure', 'MonthlyCharges', 'TotalCharges']
         scaler = StandardScaler()
-        df_clean[numerical_cols] = scaler.fit_transform(df_clean[numerical_cols])
+        if all(col in df_clean.columns for col in numerical_cols):
+            df_clean[numerical_cols] = scaler.fit_transform(df_clean[numerical_cols])
+        else:
+            st.error(f"Missing numerical columns: {', '.join([col for col in numerical_cols if col not in df_clean.columns])}")
+            return None, None
 
         # Create a feature dictionary for later use in prediction
-        feature_dict = {'scaler': scaler, 'numerical_cols': numerical_cols}
+        feature_dict = {'scaler': scaler, 'numerical_cols': numerical_cols, 'categorical_cols': categorical_cols}
         
         return df_clean, feature_dict
     except Exception as e:
         st.error(f"Error in preprocessing: {e}. Please check data consistency.")
         return None, None
-
 # Train model
 def train_model(X, y, model_type='XGBoost', n_estimators=100, max_depth=6, learning_rate=0.1):
     try:
@@ -1161,7 +1165,7 @@ if df is not None:
         st.markdown('</div>', unsafe_allow_html=True)
 
     # Churn Prediction
-      # Churn Prediction
+         # Churn Prediction
     elif st.session_state.page == "Churn Prediction":
         st.markdown('<p class="main-header">Churn Prediction Model</p>', unsafe_allow_html=True)
         
@@ -1169,6 +1173,13 @@ if df is not None:
             df_clean, feature_dict = preprocess_data(df)
         
         if df_clean is not None:
+            # Verify required columns exist
+            required_cols = ['customerID', 'Churn']
+            missing_cols = [col for col in required_cols if col not in df_clean.columns]
+            if missing_cols:
+                st.error(f"Required columns missing in preprocessed data: {', '.join(missing_cols)}. Please check the dataset.")
+                st.stop()
+            
             X = df_clean.drop(['customerID', 'Churn'], axis=1)
             y = df_clean['Churn']
             
