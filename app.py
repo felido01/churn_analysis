@@ -461,7 +461,7 @@ def preprocess_data(df):
             st.write(f"{col} unique values: {df_clean[col].unique().tolist()}")
         st.markdown('</div>', unsafe_allow_html=True)
 
-        # Convert TotalCharges to numeric, handle invalid values
+        # Convert TotalCharges to numeric
         df_clean['TotalCharges'] = pd.to_numeric(df_clean['TotalCharges'], errors='coerce')
         if df_clean['TotalCharges'].isnull().any():
             st.warning("Found missing or invalid values in TotalCharges. Imputing with median.")
@@ -480,31 +480,33 @@ def preprocess_data(df):
         if missing_services:
             st.error(f"Missing service columns: {', '.join(missing_services)}. Cannot compute ServiceCount.")
             return None, None
+        
+        # Validate and clean service columns
+        expected_values = {
+            'PhoneService': ['Yes', 'No'],
+            'MultipleLines': ['Yes', 'No', 'No phone service'],
+            'InternetService': ['DSL', 'Fiber optic', 'No'],
+            'OnlineSecurity': ['Yes', 'No', 'No internet service'],
+            'OnlineBackup': ['Yes', 'No', 'No internet service'],
+            'DeviceProtection': ['Yes', 'No', 'No internet service'],
+            'TechSupport': ['Yes', 'No', 'No internet service'],
+            'StreamingTV': ['Yes', 'No', 'No internet service'],
+            'StreamingMovies': ['Yes', 'No', 'No internet service']
+        }
         for col in service_cols:
             if df_clean[col].isnull().any():
                 st.warning(f"Column {col} contains missing values. Filling with 'No' or mode.")
                 df_clean[col] = df_clean[col].fillna('No' if col != 'InternetService' else df_clean['InternetService'].mode()[0])
-            # Validate categorical values
-            expected_values = {
-                'PhoneService': ['Yes', 'No'],
-                'MultipleLines': ['Yes', 'No', 'No phone service'],
-                'InternetService': ['DSL', 'Fiber optic', 'No'],
-                'OnlineSecurity': ['Yes', 'No', 'No internet service'],
-                'OnlineBackup': ['Yes', 'No', 'No internet service'],
-                'DeviceProtection': ['Yes', 'No', 'No internet service'],
-                'TechSupport': ['Yes', 'No', 'No internet service'],
-                'StreamingTV': ['Yes', 'No', 'No internet service'],
-                'StreamingMovies': ['Yes', 'No', 'No internet service']
-            }
             if col in expected_values:
                 invalid_values = df_clean[col][~df_clean[col].isin(expected_values[col])].unique()
                 if len(invalid_values) > 0:
                     st.warning(f"Invalid values in {col}: {invalid_values.tolist()}. Replacing with mode.")
                     df_clean[col] = df_clean[col].replace(invalid_values, df_clean[col].mode()[0])
         
+        # Compute ServiceCount safely
         df_clean['ServiceCount'] = df_clean[service_cols].apply(
-            lambda x: sum(1 for col in service_cols if (col != 'InternetService' and x[col] == 'Yes') or 
-                         (col == 'InternetService' and x[col] in ['DSL', 'Fiber optic'])), axis=1)
+            lambda x: sum(1 for col in service_cols if (col != 'InternetService' and str(x[col]) == 'Yes') or 
+                         (col == 'InternetService' and str(x[col]) in ['DSL', 'Fiber optic'])), axis=1)
 
         # Handle outliers in numerical columns
         numerical_cols = ['tenure', 'MonthlyCharges', 'TotalCharges', 'ChargesPerMonth', 'ServiceCount']
@@ -523,11 +525,13 @@ def preprocess_data(df):
         if 'Churn' in df_clean.columns:
             if not df_clean['Churn'].isin(['Yes', 'No']).all():
                 st.warning(f"Invalid values in Churn: {df_clean['Churn'].unique().tolist()}. Replacing with mode.")
-                df_clean['Churn'] = df_clean['Churn'].replace(df_clean['Churn'][~df_clean['Churn'].isin(['Yes', 'No'])], 
-                                                            df_clean['Churn'].mode()[0])
+                df_clean['Churn'] = df_clean['Churn'].replace(
+                    df_clean['Churn'][~df_clean['Churn'].isin(['Yes', 'No'])], 
+                    df_clean['Churn'].mode()[0]
+                )
             df_clean['Churn'] = churn_encoder.fit_transform(df_clean['Churn'].astype(str))
         else:
-            st.error("Churn column missing in dataset. Please check the dataset.")
+            st.error("Churn column missing in dataset.")
             return None, None
 
         # Handle categorical columns with one-hot encoding
@@ -553,7 +557,6 @@ def preprocess_data(df):
         feature_dict = {
             'scaler': scaler,
             'numerical_cols': numerical_cols,
- Disney 1
             'categorical_cols': categorical_cols,
             'churn_encoder': churn_encoder,
             'service_cols': service_cols
