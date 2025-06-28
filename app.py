@@ -447,7 +447,7 @@ def preprocess_data(df):
         # Validate dataset
         missing_cols = [col for col in EXPECTED_COLUMNS if col not in df_clean.columns]
         if missing_cols:
-            st.error(f"Missing columns: {', '.join(missing_cols)}. Please ensure the dataset contains all required columns.")
+            st.error(f"Missing columns: {', '.join(missing_cols)}. Please ensure the dataset contains all required columns: {', '.join(EXPECTED_COLUMNS)}.")
             return None, None
         
         # Display dataset info for debugging
@@ -455,33 +455,56 @@ def preprocess_data(df):
         st.write("**Dataset Validation**:")
         st.write(f"Rows: {df_clean.shape[0]:,}")
         st.write(f"Columns: {df_clean.shape[1]}")
-        st.write(f"Missing values: {df_clean.isnull().sum().sum()}")
+        st.write(f"Missing values (total): {df_clean.isnull().sum().sum()}")
         st.write(f"Churn distribution: {df_clean['Churn'].value_counts(normalize=True).to_dict()}")
+        for col in df_clean.select_dtypes(include='object').columns:
+            st.write(f"{col} unique values: {df_clean[col].unique().tolist()}")
         st.markdown('</div>', unsafe_allow_html=True)
 
-        # Convert TotalCharges to numeric, fill missing with median
+        # Convert TotalCharges to numeric, handle invalid values
         df_clean['TotalCharges'] = pd.to_numeric(df_clean['TotalCharges'], errors='coerce')
         if df_clean['TotalCharges'].isnull().any():
             st.warning("Found missing or invalid values in TotalCharges. Imputing with median.")
             df_clean['TotalCharges'] = df_clean['TotalCharges'].fillna(df_clean['TotalCharges'].median())
 
-        # Feature engineering
-        # Charges per month
+        # Feature engineering: ChargesPerMonth
         df_clean['ChargesPerMonth'] = df_clean['TotalCharges'] / (df_clean['tenure'] + 1)  # Avoid division by zero
         if df_clean['ChargesPerMonth'].isnull().any():
             st.warning("Found missing values in ChargesPerMonth. Imputing with median.")
             df_clean['ChargesPerMonth'] = df_clean['ChargesPerMonth'].fillna(df_clean['ChargesPerMonth'].median())
-        
-        # Count of subscribed services
+
+        # Feature engineering: ServiceCount
         service_cols = ['PhoneService', 'MultipleLines', 'InternetService', 'OnlineSecurity', 'OnlineBackup', 
                         'DeviceProtection', 'TechSupport', 'StreamingTV', 'StreamingMovies']
         missing_services = [col for col in service_cols if col not in df_clean.columns]
         if missing_services:
             st.error(f"Missing service columns: {', '.join(missing_services)}. Cannot compute ServiceCount.")
             return None, None
+        for col in service_cols:
+            if df_clean[col].isnull().any():
+                st.warning(f"Column {col} contains missing values. Filling with 'No' or mode.")
+                df_clean[col] = df_clean[col].fillna('No' if col != 'InternetService' else df_clean['InternetService'].mode()[0])
+            # Validate categorical values
+            expected_values = {
+                'PhoneService': ['Yes', 'No'],
+                'MultipleLines': ['Yes', 'No', 'No phone service'],
+                'InternetService': ['DSL', 'Fiber optic', 'No'],
+                'OnlineSecurity': ['Yes', 'No', 'No internet service'],
+                'OnlineBackup': ['Yes', 'No', 'No internet service'],
+                'DeviceProtection': ['Yes', 'No', 'No internet service'],
+                'TechSupport': ['Yes', 'No', 'No internet service'],
+                'StreamingTV': ['Yes', 'No', 'No internet service'],
+                'StreamingMovies': ['Yes', 'No', 'No internet service']
+            }
+            if col in expected_values:
+                invalid_values = df_clean[col][~df_clean[col].isin(expected_values[col])].unique()
+                if len(invalid_values) > 0:
+                    st.warning(f"Invalid values in {col}: {invalid_values.tolist()}. Replacing with mode.")
+                    df_clean[col] = df_clean[col].replace(invalid_values, df_clean[col].mode()[0])
+        
         df_clean['ServiceCount'] = df_clean[service_cols].apply(
-            lambda x: sum(x == 'Yes' if col != 'InternetService' else x in ['DSL', 'Fiber optic'] 
-                         for col in service_cols), axis=1)
+            lambda x: sum(1 for col in service_cols if (col != 'InternetService' and x[col] == 'Yes') or 
+                         (col == 'InternetService' and x[col] in ['DSL', 'Fiber optic'])), axis=1)
 
         # Handle outliers in numerical columns
         numerical_cols = ['tenure', 'MonthlyCharges', 'TotalCharges', 'ChargesPerMonth', 'ServiceCount']
@@ -498,19 +521,23 @@ def preprocess_data(df):
         # Encode Churn column
         churn_encoder = LabelEncoder()
         if 'Churn' in df_clean.columns:
+            if not df_clean['Churn'].isin(['Yes', 'No']).all():
+                st.warning(f"Invalid values in Churn: {df_clean['Churn'].unique().tolist()}. Replacing with mode.")
+                df_clean['Churn'] = df_clean['Churn'].replace(df_clean['Churn'][~df_clean['Churn'].isin(['Yes', 'No'])], 
+                                                            df_clean['Churn'].mode()[0])
             df_clean['Churn'] = churn_encoder.fit_transform(df_clean['Churn'].astype(str))
         else:
             st.error("Churn column missing in dataset. Please check the dataset.")
             return None, None
 
-        # Handle categorical columns with one-hot encoding, excluding customerID and Churn
+        # Handle categorical columns with one-hot encoding
         categorical_cols = [
             col for col in df_clean.columns 
             if col in EXPECTED_COLUMNS and col not in ['customerID', 'Churn'] and df_clean[col].dtype == 'object'
         ]
         for col in categorical_cols:
             if df_clean[col].isnull().any():
-                st.warning(f"Column {col} contains missing values. Filling with most frequent value.")
+                st.warning(f"Column {col} contains missing values. Filling with mode.")
                 df_clean[col] = df_clean[col].fillna(df_clean[col].mode()[0])
         df_clean = pd.get_dummies(df_clean, columns=categorical_cols, drop_first=True)
 
@@ -522,10 +549,11 @@ def preprocess_data(df):
             st.error(f"Missing numerical columns: {', '.join([col for col in numerical_cols if col not in df_clean.columns])}")
             return None, None
 
-        # Create a feature dictionary for later use in prediction
+        # Create feature dictionary
         feature_dict = {
             'scaler': scaler,
             'numerical_cols': numerical_cols,
+ Disney 1
             'categorical_cols': categorical_cols,
             'churn_encoder': churn_encoder,
             'service_cols': service_cols
@@ -560,7 +588,7 @@ def train_model(X, y, model_type='XGBoost', n_estimators=100, max_depth=5, learn
             grid_search = GridSearchCV(
                 estimator=model,
                 param_grid=param_grid,
-                scoring='f1',  # Optimize for F1-score
+                scoring='f1',
                 cv=3,
                 n_jobs=-1,
                 error_score='raise'
