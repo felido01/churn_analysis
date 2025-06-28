@@ -441,7 +441,8 @@ def load_data():
         return None
 
 # Preprocess data
-# Preprocess data
+
+
 def preprocess_data(df):
     try:
         df_clean = df.copy()
@@ -450,6 +451,14 @@ def preprocess_data(df):
         if df_clean['TotalCharges'].isnull().any():
             st.warning("Found missing or invalid values in TotalCharges. Imputing with median.")
             df_clean['TotalCharges'] = df_clean['TotalCharges'].fillna(df_clean['TotalCharges'].median())
+
+        # Encode Churn column
+        churn_encoder = LabelEncoder()
+        if 'Churn' in df_clean.columns:
+            df_clean['Churn'] = churn_encoder.fit_transform(df_clean['Churn'].astype(str))
+        else:
+            st.error("Churn column missing in dataset. Please check the dataset.")
+            return None, None
 
         # Handle categorical columns with one-hot encoding, excluding customerID and Churn
         categorical_cols = [
@@ -468,13 +477,20 @@ def preprocess_data(df):
             return None, None
 
         # Create a feature dictionary for later use in prediction
-        feature_dict = {'scaler': scaler, 'numerical_cols': numerical_cols, 'categorical_cols': categorical_cols}
+        feature_dict = {
+            'scaler': scaler,
+            'numerical_cols': numerical_cols,
+            'categorical_cols': categorical_cols,
+            'churn_encoder': churn_encoder
+        }
         
         return df_clean, feature_dict
     except Exception as e:
         st.error(f"Error in preprocessing: {e}. Please check data consistency.")
         return None, None
-# Train model
+import xgboost as xgb
+from sklearn.model_selection import GridSearchCV
+
 def train_model(X, y, model_type='XGBoost', n_estimators=100, max_depth=6, learning_rate=0.1):
     try:
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42, stratify=y)
@@ -504,12 +520,15 @@ def train_model(X, y, model_type='XGBoost', n_estimators=100, max_depth=6, learn
                 scoring='accuracy',
                 cv=5,
                 n_jobs=-1,
-                verbose=0
+                error_score='raise'  # Raise detailed errors for debugging
             )
-            grid_search.fit(X_train, y_train)
-            model = grid_search.best_estimator_
+            try:
+                grid_search.fit(X_train, y_train)
+                model = grid_search.best_estimator_
+            except Exception as e:
+                st.error(f"GridSearchCV failed: {e}. Falling back to default XGBoost model.")
+                model.fit(X_train, y_train)  # Train with default parameters as fallback
         else:
-            # Fallback to original models for compatibility
             if model_type == 'RandomForest':
                 model = RandomForestClassifier(n_estimators=n_estimators, max_depth=max_depth, random_state=42, n_jobs=-1)
             else:
@@ -1164,8 +1183,7 @@ if df is not None:
         st.plotly_chart(fig, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # Churn Prediction
-         # Churn Prediction
+      # Churn Prediction
     elif st.session_state.page == "Churn Prediction":
         st.markdown('<p class="main-header">Churn Prediction Model</p>', unsafe_allow_html=True)
         
@@ -1194,7 +1212,7 @@ if df is not None:
             st.markdown('</div>', unsafe_allow_html=True)
             
             with st.spinner("Training model..."):
-                model_params = st.session_state.get('model_params', {})
+                model_params = st.session_state.get('model judged_params', {})
                 model, X_test, y_test, y_pred = train_model(
                     X, y, model_type,
                     n_estimators=model_params.get('n_estimators', 100),
@@ -1298,8 +1316,10 @@ if df is not None:
                                 )
                                 prediction = model.predict(input_data)
                                 prob = model.predict_proba(input_data)[0]
+                                # Decode prediction back to 'No'/'Yes' for display
+                                prediction_label = feature_dict['churn_encoder'].inverse_transform(prediction)[0]
                                 st.markdown('<div class="metric-box">', unsafe_allow_html=True)
-                                st.write(f"**Prediction**: {'Churn' if prediction[0] == 1 else 'No Churn'}")
+                                st.write(f"**Prediction**: {prediction_label}")
                                 st.write(f"**Churn Probability**: {prob[1]:.2%}")
                                 st.markdown('</div>', unsafe_allow_html=True)
                             except Exception as e:
