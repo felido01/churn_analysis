@@ -1161,113 +1161,136 @@ if df is not None:
         st.markdown('</div>', unsafe_allow_html=True)
 
     # Churn Prediction
-   st.markdown('<p class="sub-header">Predict Churn for a Single Customer</p>', unsafe_allow_html=True)
-st.markdown('<div class="filter-container">', unsafe_allow_html=True)
-st.write("Enter customer details below to predict churn probability.")
-
-with st.form("prediction_form"):
-    cols = st.columns(4)
-    inputs = {}
-    for i, col in enumerate(df.columns):
-        if col in ['customerID', 'Churn']:
-            continue
-        with cols[i % 4]:
-            if col in feature_dict['numerical_cols']:
-                min_val = float(df[col].min())
-                max_val = float(df[col].max())
-                avg_val = float(df[col].mean())
-                inputs[col] = st.st.number_input(
-                    f"{col}",
-                    min_value=min_val,
-                    max_value=max_val,
-                    value=avg_val,
-                    help=f"Enter a value for {col} (range: {min_val:.2f} to {max_val:.2f})",
-                    key=f"input_{col}"
-                )
-            else:
-                unique_vals = list(df[col].unique())
-                inputs[col] = st.selectbox(
-                    f"{col}",
-                    unique_vals,
-                    help=f"Select a value for {col}",
-                    key=f"pred_{col}"
-                )
-    
-    submit = st.form_submit_button("Predict Churn")
-    
-    if submit:
-        with st.spinner("Making prediction..."):
-            input_data = pd.DataFrame([inputs])
-            try:
-                # Apply one-hot encoding to input data
-                input_data = pd.get_dummies(input_data)
-                # Align columns with training data
-                for col in X.columns:
-                    if col not in input_data.columns:
-                        input_data[col] = 0
-                input_data = input_data[X.columns]
-                # Scale numerical features
-                input_data[feature_dict['numerical_cols']] = feature_dict['scaler'].transform(
-                    input_data[feature_dict['numerical_cols']]
-                )
-                prediction = model.predict(input_data)
-                prob = model.predict_proba(input_data)[0]
-                st.markdown('<div class="metric-box">', unsafe_allow_html=True)
-                st.write(f"**Prediction**: {'Churn' if prediction[0] == 1 else 'No Churn'}")
-                st.write(f"**Churn Probability**: {prob[1]:.2%}")
-                st.markdown('</div>', unsafe_allow_html=True)
-            except Exception as e:
-                st.error(f"Prediction error: {e}. Please check input data.")
-st.markdown('</div>', unsafe_allow_html=True)
-else:
-    st.markdown('<div class="metric-box">', unsafe_allow_html=True)
-    st.error("Error: Please ensure the dataset file 'customer_churn_data.csv' is available in the correct directory. Some features will be disabled.")
-    st.markdown('</div>', unsafe_allow_html=True)
-    
-    if st.session_state.page == "Home":
-        st.markdown("""
-            <div class="hero-section">
-                <h1 class="main-header">Customer Churn Analysis Dashboard</h1>
-                <p class="hero-text">
-                    A comprehensive platform for analyzing customer behavior, identifying churn drivers, and predicting at-risk customers to inform strategic retention efforts.
-                </p>
-            </div>
-        """, unsafe_allow_html=True)
-
-        st.markdown('<p class="sub-header">Get Started</p>', unsafe_allow_html=True)
-        col1, col2 = st.columns(2, gap="medium")
-        with col1:
-            if st.button("Explore the Dashboard", key="explore_dashboard"):
-                st.session_state.page = "Dashboard"
-                st.rerun()
-        with col2:
-            st.markdown(
-                """
-                <a href="https://github.com/felido01/churn_analysis" target="_blank" class="custom-button">
-                    View Documentation
-                </a>
-                """, 
-                unsafe_allow_html=True
+      # Churn Prediction
+    elif st.session_state.page == "Churn Prediction":
+        st.markdown('<p class="main-header">Churn Prediction Model</p>', unsafe_allow_html=True)
+        
+        with st.spinner("Preprocessing data..."):
+            df_clean, feature_dict = preprocess_data(df)
+        
+        if df_clean is not None:
+            X = df_clean.drop(['customerID', 'Churn'], axis=1)
+            y = df_clean['Churn']
+            
+            st.markdown('<div class="filter-container">', unsafe_allow_html=True)
+            model_type = st.selectbox(
+                "Select Model",
+                ["XGBoost", "RandomForest", "LogisticRegression"],
+                help="Choose the machine learning model for prediction.",
+                key="model_type_main",
+                index=["XGBoost", "RandomForest", "LogisticRegression"].index(st.session_state.get('sidebar_model_type', 'XGBoost'))
             )
-
-        st.markdown('<p class="sub-header">About the Dataset</p>', unsafe_allow_html=True)
-        st.markdown("""
-            <div class="about-dataset">
-                <h3>Dataset Overview</h3>
-                <p>The telecom customer dataset provides comprehensive data to support churn analysis and retention strategies. Key features include:</p>
-                <ul>
-                    <li>Customer Demographics: Gender, Senior Citizen status, Partner, Dependents.</li>
-                    <li>Service Subscriptions: Phone, Internet, Online Security, Streaming, and more.</li>
-                    <li>Billing Information: Contract types, Payment methods, Monthly and Total Charges.</li>
-                    <li>Churn Status: Indicates whether a customer has churned (Yes/No).</li>
-                </ul>
-                <p><b>Note:</b> Please upload the dataset to enable full functionality.</p>
-            </div>
-        """, unsafe_allow_html=True)
-
-        st.markdown("""
-            <div class="footer-section">
-                <p>Churn Analytics Dashboard v1.0.0</p>
-                <p>Powered by <a href="https://felido01.github.io/felixidowu01/intro.html" target="_blank">Felixidowu</a></p>
-            </div>
-        """, unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+            with st.spinner("Training model..."):
+                model_params = st.session_state.get('model_params', {})
+                model, X_test, y_test, y_pred = train_model(
+                    X, y, model_type,
+                    n_estimators=model_params.get('n_estimators', 100),
+                    max_depth=model_params.get('max_depth', 6),
+                    learning_rate=model_params.get('learning_rate', 0.1)
+                )
+            
+            if model is not None:
+                report_data = generate_analysis_report(filtered_df, model, X_test, y_test, y_pred, model_type)
+                st.session_state['report_data'] = report_data
+                
+                st.markdown('<p class="sub-header">Model Performance</p>', unsafe_allow_html=True)
+                st.markdown('<div class="chart-card">', unsafe_allow_html=True)
+                st.write(f"**Accuracy**: {accuracy_score(y_test, y_pred):.2f}")
+                st.write("**Classification Report**:")
+                st.text(classification_report(y_test, y_pred, target_names=['No Churn', 'Churn']))
+                st.markdown('</div>', unsafe_allow_html=True)
+                
+                st.markdown('<p class="sub-header">Confusion Matrix</p>', unsafe_allow_html=True)
+                st.markdown('<div class="chart-card">', unsafe_allow_html=True)
+                cm = confusion_matrix(y_test, y_pred)
+                fig = go.Figure(data=go.Heatmap(
+                    z=cm,
+                    x=['No Churn', 'Churn'],
+                    y=['No Churn', 'Churn'],
+                    text=cm,
+                    texttemplate="%{text}",
+                    colorscale='Blues'
+                ))
+                fig.update_layout(title="Confusion Matrix", template='plotly_dark')
+                st.plotly_chart(fig, use_container_width=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+                
+                if model_type == 'XGBoost' or model_type == 'RandomForest':
+                    st.markdown('<p class="sub-header">Feature Importance</p>', unsafe_allow_html=True)
+                    st.markdown('<div class="chart-card">', unsafe_allow_html=True)
+                    feature_importance = pd.DataFrame({
+                        'feature': X.columns,
+                        'importance': model.feature_importances_
+                    }).sort_values(by='importance', ascending=False)
+                    fig = px.bar(
+                        feature_importance,
+                        x='importance',
+                        y='feature',
+                        title="Feature Importance",
+                        color_discrete_sequence=['#2DD4BF'],
+                        template='plotly_dark'
+                    )
+                    fig.update_layout(title_x=0.5, margin=dict(t=50, b=20))
+                    st.plotly_chart(fig, use_container_width=True)
+                    st.markdown('</div>', unsafe_allow_html=True)
+                
+                st.markdown('<p class="sub-header">Predict Churn for a Single Customer</p>', unsafe_allow_html=True)
+                st.markdown('<div class="filter-container">', unsafe_allow_html=True)
+                st.write("Enter customer details below to predict churn probability.")
+                
+                with st.form("prediction_form"):
+                    cols = st.columns(4)
+                    inputs = {}
+                    for i, col in enumerate(df.columns):
+                        if col in ['customerID', 'Churn']:
+                            continue
+                        with cols[i % 4]:
+                            if col in feature_dict['numerical_cols']:
+                                min_val = float(df[col].min())
+                                max_val = float(df[col].max())
+                                avg_val = float(df[col].mean())
+                                inputs[col] = st.number_input(
+                                    f"{col}",
+                                    min_value=min_val,
+                                    max_value=max_val,
+                                    value=avg_val,
+                                    help=f"Enter a value for {col} (range: {min_val:.2f} to {max_val:.2f})",
+                                    key=f"input_{col}"
+                                )
+                            else:
+                                unique_vals = list(df[col].unique())
+                                inputs[col] = st.selectbox(
+                                    f"{col}",
+                                    unique_vals,
+                                    help=f"Select a value for {col}",
+                                    key=f"pred_{col}"
+                                )
+                    
+                    submit = st.form_submit_button("Predict Churn")
+                    
+                    if submit:
+                        with st.spinner("Making prediction..."):
+                            input_data = pd.DataFrame([inputs])
+                            try:
+                                # Apply one-hot encoding to input data
+                                input_data = pd.get_dummies(input_data)
+                                # Align columns with training data
+                                for col in X.columns:
+                                    if col not in input_data.columns:
+                                        input_data[col] = 0
+                                input_data = input_data[X.columns]
+                                # Scale numerical features
+                                input_data[feature_dict['numerical_cols']] = feature_dict['scaler'].transform(
+                                    input_data[feature_dict['numerical_cols']]
+                                )
+                                prediction = model.predict(input_data)
+                                prob = model.predict_proba(input_data)[0]
+                                st.markdown('<div class="metric-box">', unsafe_allow_html=True)
+                                st.write(f"**Prediction**: {'Churn' if prediction[0] == 1 else 'No Churn'}")
+                                st.write(f"**Churn Probability**: {prob[1]:.2%}")
+                                st.markdown('</div>', unsafe_allow_html=True)
+                            except Exception as e:
+                                st.error(f"Prediction error: {e}. Please check input data.")
+                st.markdown('</div>', unsafe_allow_html=True)
