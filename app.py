@@ -1,6 +1,9 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import xgboost as xgb
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import GridSearchCV
 import plotly.express as px
 import plotly.graph_objects as go
 from sklearn.model_selection import train_test_split
@@ -441,33 +444,74 @@ def load_data():
 def preprocess_data(df):
     try:
         df_clean = df.copy()
+        # Convert TotalCharges to numeric, fill missing with median
         df_clean['TotalCharges'] = pd.to_numeric(df_clean['TotalCharges'], errors='coerce')
         if df_clean['TotalCharges'].isnull().any():
             st.warning("Found missing or invalid values in TotalCharges. Imputing with median.")
             df_clean['TotalCharges'] = df_clean['TotalCharges'].fillna(df_clean['TotalCharges'].median())
-        le_dict = {}
+
+        # Handle categorical columns with one-hot encoding
         categorical_cols = [
             col for col in df_clean.columns 
             if col in EXPECTED_COLUMNS and col != 'customerID' and df_clean[col].dtype == 'object'
         ]
-        for col in categorical_cols:
-            le = LabelEncoder()
-            df_clean[col] = le.fit_transform(df_clean[col].astype(str))
-            le_dict[col] = le
-        return df_clean, le_dict
+        df_clean = pd.get_dummies(df_clean, columns=categorical_cols, drop_first=True)
+
+        # Scale numerical features
+        numerical_cols = ['tenure', 'MonthlyCharges', 'TotalCharges']
+        scaler = StandardScaler()
+        df_clean[numerical_cols] = scaler.fit_transform(df_clean[numerical_cols])
+
+        # Create a feature dictionary for later use in prediction
+        feature_dict = {'scaler': scaler, 'numerical_cols': numerical_cols}
+        
+        return df_clean, feature_dict
     except Exception as e:
         st.error(f"Error in preprocessing: {e}. Please check data consistency.")
         return None, None
 
 # Train model
-def train_model(X, y, model_type='RandomForest', n_estimators=100, max_depth=None):
+def train_model(X, y, model_type='XGBoost', n_estimators=100, max_depth=6, learning_rate=0.1):
     try:
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
-        if model_type == 'RandomForest':
-            model = RandomForestClassifier(n_estimators=n_estimators, max_depth=max_depth, random_state=42, n_jobs=-1)
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42, stratify=y)
+
+        # Calculate scale_pos_weight for class imbalance
+        scale_pos_weight = (y == 0).sum() / (y == 1).sum() if (y == 1).sum() > 0 else 1
+
+        if model_type == 'XGBoost':
+            model = xgb.XGBClassifier(
+                n_estimators=n_estimators,
+                max_depth=max_depth,
+                learning_rate=learning_rate,
+                scale_pos_weight=scale_pos_weight,
+                random_state=42,
+                n_jobs=-1,
+                eval_metric='logloss'
+            )
+            # Define parameter grid for tuning
+            param_grid = {
+                'n_estimators': [50, 100, 200],
+                'max_depth': [3, 6, 9],
+                'learning_rate': [0.01, 0.1, 0.3]
+            }
+            grid_search = GridSearchCV(
+                estimator=model,
+                param_grid=param_grid,
+                scoring='accuracy',
+                cv=5,
+                n_jobs=-1,
+                verbose=0
+            )
+            grid_search.fit(X_train, y_train)
+            model = grid_search.best_estimator_
         else:
-            model = LogisticRegression(max_iter=1000, random_state=42)
-        model.fit(X_train, y_train)
+            # Fallback to original models for compatibility
+            if model_type == 'RandomForest':
+                model = RandomForestClassifier(n_estimators=n_estimators, max_depth=max_depth, random_state=42, n_jobs=-1)
+            else:
+                model = LogisticRegression(max_iter=1000, random_state=42)
+            model.fit(X_train, y_train)
+
         y_pred = model.predict(X_test)
         return model, X_test, y_test, y_pred
     except Exception as e:
@@ -592,10 +636,15 @@ with st.sidebar.expander("Quick Filters", expanded=False):
 # Model Parameters
 with st.sidebar.expander("Model Parameters", expanded=False):
     st.markdown("<h4>Adjust Model Settings</h4>", unsafe_allow_html=True)
-    model_type = st.selectbox("Model Type", ["RandomForest", "LogisticRegression"], key="sidebar_model_type")
-    if model_type == "RandomForest":
-        n_estimators = st.slider("Number of Trees", 50, 200, st.session_state.model_params.get('n_estimators', 100), step=10, key="n_estimators")
-        max_depth = st.slider("Max Depth", 5, 50, st.session_state.model_params.get('max_depth', None) or 10, step=5, key="max_depth")
+    model_type = st.selectbox("Model Type", ["XGBoost", "RandomForest", "LogisticRegression"], key="sidebar_model_type")
+    if model_type == "XGBoost":
+        n_estimators = st.slider("Number of Trees", 50, 200, st.session_state.model_params.get('n_estimators', 100), step=10, key="n_estimators_xgb")
+        max_depth = st.slider("Max Depth", 3, 9, st.session_state.model_params.get('max_depth', 6), step=1, key="max_depth_xgb")
+        learning_rate = st.slider("Learning Rate", 0.01, 0.3, st.session_state.model_params.get('learning_rate', 0.1), step=0.01, key="learning_rate_xgb")
+        st.session_state.model_params = {'n_estimators': n_estimators, 'max_depth': max_depth, 'learning_rate': learning_rate}
+    elif model_type == "RandomForest":
+        n_estimators = st.slider("Number of Trees", 50, 200, st.session_state.model_params.get('n_estimators', 100), step=10, key="n_estimators_rf")
+        max_depth = st.slider("Max Depth", 5, 50, st.session_state.model_params.get('max_depth', 10), step=5, key="max_depth_rf")
         st.session_state.model_params = {'n_estimators': n_estimators, 'max_depth': max_depth}
     else:
         st.session_state.model_params = {}
@@ -1112,131 +1161,64 @@ if df is not None:
         st.markdown('</div>', unsafe_allow_html=True)
 
     # Churn Prediction
-    elif st.session_state.page == "Churn Prediction":
-        st.markdown('<p class="main-header">Churn Prediction Model</p>', unsafe_allow_html=True)
-        
-        with st.spinner("Preprocessing data..."):
-            df_clean, le_dict = preprocess_data(df)
-        
-        if df_clean is not None:
-            X = df_clean.drop(['customerID', 'Churn'], axis=1)
-            y = df_clean['Churn']
-            
-            st.markdown('<div class="filter-container">', unsafe_allow_html=True)
-            model_type = st.selectbox(
-                "Select Model",
-                ["RandomForest", "LogisticRegression"],
-                help="Choose the machine learning model for prediction.",
-                key="model_type_main",
-                index=["RandomForest", "LogisticRegression"].index(st.session_state.get('sidebar_model_type', 'RandomForest'))
-            )
-            st.markdown('</div>', unsafe_allow_html=True)
-            
-            with st.spinner("Training model..."):
-                model_params = st.session_state.get('model_params', {})
-                model, X_test, y_test, y_pred = train_model(
-                    X, y, model_type,
-                    n_estimators=model_params.get('n_estimators', 100),
-                    max_depth=model_params.get('max_depth', None)
+   st.markdown('<p class="sub-header">Predict Churn for a Single Customer</p>', unsafe_allow_html=True)
+st.markdown('<div class="filter-container">', unsafe_allow_html=True)
+st.write("Enter customer details below to predict churn probability.")
+
+with st.form("prediction_form"):
+    cols = st.columns(4)
+    inputs = {}
+    for i, col in enumerate(df.columns):
+        if col in ['customerID', 'Churn']:
+            continue
+        with cols[i % 4]:
+            if col in feature_dict['numerical_cols']:
+                min_val = float(df[col].min())
+                max_val = float(df[col].max())
+                avg_val = float(df[col].mean())
+                inputs[col] = st.st.number_input(
+                    f"{col}",
+                    min_value=min_val,
+                    max_value=max_val,
+                    value=avg_val,
+                    help=f"Enter a value for {col} (range: {min_val:.2f} to {max_val:.2f})",
+                    key=f"input_{col}"
                 )
-            
-            if model is not None:
-                report_data = generate_analysis_report(filtered_df, model, X_test, y_test, y_pred, model_type)
-                st.session_state['report_data'] = report_data
-                
-                st.markdown('<p class="sub-header">Model Performance</p>', unsafe_allow_html=True)
-                st.markdown('<div class="chart-card">', unsafe_allow_html=True)
-                st.write(f"**Accuracy**: {accuracy_score(y_test, y_pred):.2f}")
-                st.write("**Classification Report**:")
-                st.text(classification_report(y_test, y_pred, target_names=['No Churn', 'Churn']))
+            else:
+                unique_vals = list(df[col].unique())
+                inputs[col] = st.selectbox(
+                    f"{col}",
+                    unique_vals,
+                    help=f"Select a value for {col}",
+                    key=f"pred_{col}"
+                )
+    
+    submit = st.form_submit_button("Predict Churn")
+    
+    if submit:
+        with st.spinner("Making prediction..."):
+            input_data = pd.DataFrame([inputs])
+            try:
+                # Apply one-hot encoding to input data
+                input_data = pd.get_dummies(input_data)
+                # Align columns with training data
+                for col in X.columns:
+                    if col not in input_data.columns:
+                        input_data[col] = 0
+                input_data = input_data[X.columns]
+                # Scale numerical features
+                input_data[feature_dict['numerical_cols']] = feature_dict['scaler'].transform(
+                    input_data[feature_dict['numerical_cols']]
+                )
+                prediction = model.predict(input_data)
+                prob = model.predict_proba(input_data)[0]
+                st.markdown('<div class="metric-box">', unsafe_allow_html=True)
+                st.write(f"**Prediction**: {'Churn' if prediction[0] == 1 else 'No Churn'}")
+                st.write(f"**Churn Probability**: {prob[1]:.2%}")
                 st.markdown('</div>', unsafe_allow_html=True)
-                
-                st.markdown('<p class="sub-header">Confusion Matrix</p>', unsafe_allow_html=True)
-                st.markdown('<div class="chart-card">', unsafe_allow_html=True)
-                cm = confusion_matrix(y_test, y_pred)
-                fig = go.Figure(data=go.Heatmap(
-                    z=cm,
-                    x=['No Churn', 'Churn'],
-                    y=['No Churn', 'Churn'],
-                    text=cm,
-                    texttemplate="%{text}",
-                    colorscale='Blues'
-                ))
-                fig.update_layout(title="Confusion Matrix", template='plotly_dark')
-                st.plotly_chart(fig, use_container_width=True)
-                st.markdown('</div>', unsafe_allow_html=True)
-                
-                if model_type == 'RandomForest':
-                    st.markdown('<p class="sub-header">Feature Importance</p>', unsafe_allow_html=True)
-                    st.markdown('<div class="chart-card">', unsafe_allow_html=True)
-                    feature_importance = pd.DataFrame({
-                        'feature': X.columns,
-                        'importance': model.feature_importances_
-                    }).sort_values(by='importance', ascending=False)
-                    fig = px.bar(
-                        feature_importance,
-                        x='importance',
-                        y='feature',
-                        title="Feature Importance",
-                        color_discrete_sequence=['#2DD4BF'],
-                        template='plotly_dark'
-                    )
-                    fig.update_layout(title_x=0.5, margin=dict(t=50, b=20))
-                    st.plotly_chart(fig, use_container_width=True)
-                    st.markdown('</div>', unsafe_allow_html=True)
-                
-                st.markdown('<p class="sub-header">Predict Churn for a Single Customer</p>', unsafe_allow_html=True)
-                st.markdown('<div class="filter-container">', unsafe_allow_html=True)
-                st.write("Enter customer details below to predict churn probability.")
-                
-                with st.form("prediction_form"):
-                    cols = st.columns(4)
-                    inputs = {}
-                    for i, col in enumerate(X.columns):
-                        with cols[i % 4]:
-                            if col in le_dict:
-                                unique_vals = list(df[col].unique())
-                                inputs[col] = st.selectbox(
-                                    f"{col}",
-                                    unique_vals,
-                                    help=f"Select a value for {col}",
-                                    key=f"pred_{col}"
-                                )
-                            else:
-                                min_val = float(df[col].min())
-                                max_val = float(df[col].max())
-                                avg_val = float(df[col].mean())
-                                inputs[col] = st.number_input(
-                                    f"{col}",
-                                    min_value=min_val,
-                                    max_value=max_val,
-                                    value=avg_val,
-                                    help=f"Enter a value for {col} (range: {min_val:.2f} to {max_val:.2f})",
-                                    key=f"input_{col}"
-                                )
-                    
-                    submit = st.form_submit_button("Predict Churn")
-                    
-                    if submit:
-                        with st.spinner("Making prediction..."):
-                            input_data = pd.DataFrame([inputs])
-                            try:
-                                for col in le_dict:
-                                    if col in input_data.columns:
-                                        if input_data[col].iloc[0] in le_dict[col].classes_:
-                                            input_data[col] = le_dict[col].transform([input_data[col].iloc[0]])[0]
-                                        else:
-                                            st.error(f"Value '{input_data[col].iloc[0]}' in {col} is not recognized. Please select a valid option.")
-                                            st.stop()
-                                prediction = model.predict(input_data)
-                                prob = model.predict_proba(input_data)[0]
-                                st.markdown('<div class="metric-box">', unsafe_allow_html=True)
-                                st.write(f"**Prediction**: {'Churn' if prediction[0] == 1 else 'No Churn'}")
-                                st.write(f"**Churn Probability**: {prob[1]:.2%}")
-                                st.markdown('</div>', unsafe_allow_html=True)
-                            except Exception as e:
-                                st.error(f"Prediction error: {e}. Please check input data.")
-                st.markdown('</div>', unsafe_allow_html=True)
+            except Exception as e:
+                st.error(f"Prediction error: {e}. Please check input data.")
+st.markdown('</div>', unsafe_allow_html=True)
 else:
     st.markdown('<div class="metric-box">', unsafe_allow_html=True)
     st.error("Error: Please ensure the dataset file 'customer_churn_data.csv' is available in the correct directory. Some features will be disabled.")
