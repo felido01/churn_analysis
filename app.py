@@ -423,14 +423,16 @@ def load_data():
         if missing_cols:
             st.error(f"Missing columns: {', '.join(missing_cols)}. Please ensure the dataset contains all required columns.")
             return None
-        categorical_cols = [
-            col for col in df.columns 
-            if col in EXPECTED_COLUMNS and col != 'customerID' and df[col].dtype == 'object'
-        ]
-        for col in categorical_cols:
-            if df[col].isnull().any():
-                st.warning(f"Column {col} contains missing values. Filling with most frequent value.")
-                df[col] = df[col].fillna(df[col].mode()[0])
+        
+        # Convert TotalCharges to numeric, handling empty strings
+        df['TotalCharges'] = pd.to_numeric(df['TotalCharges'], errors='coerce')
+        
+        # Fill missing values
+        df['TotalCharges'] = df['TotalCharges'].fillna(df['TotalCharges'].median())
+        
+        # Convert SeniorCitizen to categorical
+        df['SeniorCitizen'] = df['SeniorCitizen'].map({0: 'No', 1: 'Yes'})
+        
         return df
     except FileNotFoundError:
         st.error("Dataset file 'customer_churn_data.csv' not found. Please ensure the file is in the correct directory.")
@@ -447,130 +449,78 @@ def preprocess_data(df):
         # Validate dataset
         missing_cols = [col for col in EXPECTED_COLUMNS if col not in df_clean.columns]
         if missing_cols:
-            st.error(f"Missing columns: {', '.join(missing_cols)}. Please ensure the dataset contains all required columns: {', '.join(EXPECTED_COLUMNS)}.")
+            st.error(f"Missing columns: {', '.join(missing_cols)}. Please ensure the dataset contains all required columns.")
             return None, None
         
-        # Display dataset info for debugging
-        st.markdown('<div class="chart-card">', unsafe_allow_html=True)
-        st.write("**Dataset Validation**:")
-        st.write(f"Rows: {df_clean.shape[0]:,}")
-        st.write(f"Columns: {df_clean.shape[1]}")
-        st.write(f"Missing values (total): {df_clean.isnull().sum().sum()}")
-        st.write(f"Churn distribution: {df_clean['Churn'].value_counts(normalize=True).to_dict()}")
-        for col in df_clean.select_dtypes(include='object').columns:
-            st.write(f"{col} unique values: {df_clean[col].unique().tolist()}")
-        st.markdown('</div>', unsafe_allow_html=True)
-
-        # Convert TotalCharges to numeric
-        df_clean['TotalCharges'] = pd.to_numeric(df_clean['TotalCharges'], errors='coerce')
-        if df_clean['TotalCharges'].isnull().any():
-            st.warning("Found missing or invalid values in TotalCharges. Imputing with median.")
-            df_clean['TotalCharges'] = df_clean['TotalCharges'].fillna(df_clean['TotalCharges'].median())
-
-        # Feature engineering: ChargesPerMonth
+        # Feature engineering
+        # Charges per month
         df_clean['ChargesPerMonth'] = df_clean['TotalCharges'] / (df_clean['tenure'] + 1)  # Avoid division by zero
-        if df_clean['ChargesPerMonth'].isnull().any():
-            st.warning("Found missing values in ChargesPerMonth. Imputing with median.")
-            df_clean['ChargesPerMonth'] = df_clean['ChargesPerMonth'].fillna(df_clean['ChargesPerMonth'].median())
-
-        # Feature engineering: ServiceCount
+        df_clean['ChargesPerMonth'] = df_clean['ChargesPerMonth'].fillna(df_clean['ChargesPerMonth'].median())
+        
+        # Count of subscribed services
         service_cols = ['PhoneService', 'MultipleLines', 'InternetService', 'OnlineSecurity', 'OnlineBackup', 
-                        'DeviceProtection', 'TechSupport', 'StreamingTV', 'StreamingMovies']
-        missing_services = [col for col in service_cols if col not in df_clean.columns]
-        if missing_services:
-            st.error(f"Missing service columns: {', '.join(missing_services)}. Cannot compute ServiceCount.")
-            return None, None
-        
-        # Validate and clean service columns
-        expected_values = {
-            'PhoneService': ['Yes', 'No'],
-            'MultipleLines': ['Yes', 'No', 'No phone service'],
-            'InternetService': ['DSL', 'Fiber optic', 'No'],
-            'OnlineSecurity': ['Yes', 'No', 'No internet service'],
-            'OnlineBackup': ['Yes', 'No', 'No internet service'],
-            'DeviceProtection': ['Yes', 'No', 'No internet service'],
-            'TechSupport': ['Yes', 'No', 'No internet service'],
-            'StreamingTV': ['Yes', 'No', 'No internet service'],
-            'StreamingMovies': ['Yes', 'No', 'No internet service']
-        }
-        for col in service_cols:
-            if df_clean[col].isnull().any():
-                st.warning(f"Column {col} contains missing values. Filling with 'No' or mode.")
-                df_clean[col] = df_clean[col].fillna('No' if col != 'InternetService' else df_clean['InternetService'].mode()[0])
-            if col in expected_values:
-                invalid_values = df_clean[col][~df_clean[col].isin(expected_values[col])].unique()
-                if len(invalid_values) > 0:
-                    st.warning(f"Invalid values in {col}: {invalid_values.tolist()}. Replacing with mode.")
-                    df_clean[col] = df_clean[col].replace(invalid_values, df_clean[col].mode()[0])
-        
-        # Compute ServiceCount safely
-        df_clean['ServiceCount'] = df_clean[service_cols].apply(
-            lambda x: sum(1 for col in service_cols if (col != 'InternetService' and str(x[col]) == 'Yes') or 
-                         (col == 'InternetService' and str(x[col]) in ['DSL', 'Fiber optic'])), axis=1)
+                       'DeviceProtection', 'TechSupport', 'StreamingTV', 'StreamingMovies']
+        df_clean['ServiceCount'] = df_clean.apply(lambda row: sum(
+            1 for col in service_cols 
+            if (row[col] == 'Yes' if col != 'InternetService' else row[col] in ['DSL', 'Fiber optic'])
+        , axis=1)
 
         # Handle outliers in numerical columns
         numerical_cols = ['tenure', 'MonthlyCharges', 'TotalCharges', 'ChargesPerMonth', 'ServiceCount']
         for col in numerical_cols:
-            if col in df_clean.columns:
-                q1, q3 = df_clean[col].quantile([0.25, 0.75])
-                iqr = q3 - q1
-                lower_bound, upper_bound = q1 - 1.5 * iqr, q3 + 1.5 * iqr
-                df_clean[col] = df_clean[col].clip(lower=lower_bound, upper=upper_bound)
-            else:
-                st.error(f"Column {col} missing after preprocessing. Please check dataset.")
-                return None, None
+            q1, q3 = df_clean[col].quantile([0.25, 0.75])
+            iqr = q3 - q1
+            lower_bound, upper_bound = q1 - 1.5 * iqr, q3 + 1.5 * iqr
+            df_clean[col] = df_clean[col].clip(lower=lower_bound, upper=upper_bound)
 
         # Encode Churn column
         churn_encoder = LabelEncoder()
-        if 'Churn' in df_clean.columns:
-            if not df_clean['Churn'].isin(['Yes', 'No']).all():
-                st.warning(f"Invalid values in Churn: {df_clean['Churn'].unique().tolist()}. Replacing with mode.")
-                df_clean['Churn'] = df_clean['Churn'].replace(
-                    df_clean['Churn'][~df_clean['Churn'].isin(['Yes', 'No'])], 
-                    df_clean['Churn'].mode()[0]
-                )
-            df_clean['Churn'] = churn_encoder.fit_transform(df_clean['Churn'].astype(str))
-        else:
-            st.error("Churn column missing in dataset.")
-            return None, None
+        df_clean['ChurnEncoded'] = churn_encoder.fit_transform(df_clean['Churn'].astype(str))
 
-        # Handle categorical columns with one-hot encoding
+        # Handle categorical columns with one-hot encoding, excluding customerID and Churn
         categorical_cols = [
             col for col in df_clean.columns 
             if col in EXPECTED_COLUMNS and col not in ['customerID', 'Churn'] and df_clean[col].dtype == 'object'
         ]
+        
+        # Fill missing categorical values
         for col in categorical_cols:
             if df_clean[col].isnull().any():
-                st.warning(f"Column {col} contains missing values. Filling with mode.")
                 df_clean[col] = df_clean[col].fillna(df_clean[col].mode()[0])
+        
+        # One-hot encoding
         df_clean = pd.get_dummies(df_clean, columns=categorical_cols, drop_first=True)
 
         # Scale numerical features
         scaler = StandardScaler()
-        if all(col in df_clean.columns for col in numerical_cols):
-            df_clean[numerical_cols] = scaler.fit_transform(df_clean[numerical_cols])
-        else:
-            st.error(f"Missing numerical columns: {', '.join([col for col in numerical_cols if col not in df_clean.columns])}")
-            return None, None
+        df_clean[numerical_cols] = scaler.fit_transform(df_clean[numerical_cols])
 
-        # Create feature dictionary
+        # Create a feature dictionary for later use in prediction
         feature_dict = {
             'scaler': scaler,
             'numerical_cols': numerical_cols,
             'categorical_cols': categorical_cols,
             'churn_encoder': churn_encoder,
-            'service_cols': service_cols
+            'service_cols': service_cols,
+            'encoded_columns': [col for col in df_clean.columns if col not in ['customerID', 'Churn', 'ChurnEncoded']]
         }
         
         return df_clean, feature_dict
     except Exception as e:
-        st.error(f"Error in preprocessing: {e}. Please check data consistency.")
+        st.error(f"Error in preprocessing: {str(e)}. Please check data consistency.")
         return None, None
         
-# train model
+# Train model with improved parameters
 def train_model(X, y, model_type='XGBoost', n_estimators=100, max_depth=5, learning_rate=0.1):
     try:
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42, stratify=y)
+        # Handle class imbalance with SMOTE
+        smote = SMOTE(random_state=42)
+        X_res, y_res = smote.fit_resample(X, y)
+        
+        X_train, X_test, y_train, y_test = train_test_split(
+            X_res, y_res, test_size=0.2, random_state=42, stratify=y_res
+        )
+        
         scale_pos_weight = (y == 0).sum() / (y == 1).sum() if (y == 1).sum() > 0 else 1
 
         if model_type == 'XGBoost':
@@ -581,55 +531,92 @@ def train_model(X, y, model_type='XGBoost', n_estimators=100, max_depth=5, learn
                 scale_pos_weight=scale_pos_weight,
                 random_state=42,
                 n_jobs=-1,
-                eval_metric='logloss'
+                eval_metric='logloss',
+                subsample=0.8,
+                colsample_bytree=0.8,
+                reg_alpha=0.1,
+                reg_lambda=1.0
             )
             param_grid = {
-                'n_estimators': [50, 100],
-                'max_depth': [3, 5],
-                'learning_rate': [0.05, 0.1]
+                'n_estimators': [100, 200],
+                'max_depth': [3, 5, 7],
+                'learning_rate': [0.01, 0.05, 0.1],
+                'gamma': [0, 0.1, 0.2]
             }
             grid_search = GridSearchCV(
                 estimator=model,
                 param_grid=param_grid,
-                scoring='f1',
-                cv=3,
+                scoring='roc_auc',
+                cv=5,
                 n_jobs=-1,
-                error_score='raise'
+                verbose=1
             )
-            try:
-                grid_search.fit(X_train, y_train)
-                model = grid_search.best_estimator_
-                st.info(f"Best parameters: {grid_search.best_params_}")
-            except Exception as e:
-                st.warning(f"GridSearchCV failed: {e}. Using default XGBoost model.")
-                model.fit(X_train, y_train)
+            grid_search.fit(X_train, y_train)
+            model = grid_search.best_estimator_
+            st.success(f"Best parameters found: {grid_search.best_params_}")
+            
         elif model_type == 'Stacking':
             estimators = [
-                ('xgb', xgb.XGBClassifier(n_estimators=100, max_depth=5, learning_rate=0.1, scale_pos_weight=scale_pos_weight, random_state=42)),
-                ('rf', RandomForestClassifier(n_estimators=100, max_depth=10, random_state=42))
+                ('xgb', xgb.XGBClassifier(
+                    n_estimators=150,
+                    max_depth=5,
+                    learning_rate=0.1,
+                    scale_pos_weight=scale_pos_weight,
+                    random_state=42
+                )),
+                ('rf', RandomForestClassifier(
+                    n_estimators=200,
+                    max_depth=10,
+                    random_state=42,
+                    class_weight='balanced'
+                ))
             ]
             model = StackingClassifier(
                 estimators=estimators,
-                final_estimator=LogisticRegression(max_iter=1000),
-                cv=3,
+                final_estimator=LogisticRegression(
+                    max_iter=1000,
+                    class_weight='balanced',
+                    C=0.1,
+                    solver='liblinear'
+                ),
+                cv=5,
                 n_jobs=-1
             )
             model.fit(X_train, y_train)
-        else:
-            if model_type == 'RandomForest':
-                model = RandomForestClassifier(n_estimators=n_estimators, max_depth=max_depth, random_state=42, n_jobs=-1)
-            else:
-                model = LogisticRegression(max_iter=1000, random_state=42)
+            
+        elif model_type == 'RandomForest':
+            model = RandomForestClassifier(
+                n_estimators=n_estimators,
+                max_depth=max_depth,
+                random_state=42,
+                n_jobs=-1,
+                class_weight='balanced',
+                min_samples_split=5,
+                min_samples_leaf=2
+            )
+            model.fit(X_train, y_train)
+            
+        else:  # LogisticRegression
+            model = LogisticRegression(
+                max_iter=1000,
+                random_state=42,
+                class_weight='balanced',
+                solver='liblinear',
+                C=0.1,
+                penalty='l2'
+            )
             model.fit(X_train, y_train)
 
         y_pred = model.predict(X_test)
-        return model, X_test, y_test, y_pred
+        y_pred_proba = model.predict_proba(X_test)[:, 1]
+        
+        return model, X_test, y_test, y_pred, y_pred_proba
     except Exception as e:
-        st.error(f"Error training model: {e}. Please check feature data.")
-        return None, None, None, None
+        st.error(f"Error training model: {str(e)}. Please check feature data.")
+        return None, None, None, None, None
 
 # Generate analysis report
-def generate_analysis_report(df, model=None, X_test=None, y_test=None, y_pred=None, model_type=None):
+def generate_analysis_report(df, model=None, X_test=None, y_test=None, y_pred=None, y_pred_proba=None, model_type=None):
     report = ["Customer Churn Analysis Report", "=" * 40, ""]
     
     # Key Metrics
@@ -637,7 +624,7 @@ def generate_analysis_report(df, model=None, X_test=None, y_test=None, y_pred=No
     total_customers = len(df)
     avg_tenure = df['tenure'].mean()
     avg_monthly = df['MonthlyCharges'].mean()
-    senior_pct = (df['SeniorCitizen'] == 1).mean() * 100
+    senior_pct = (df['SeniorCitizen'] == 'Yes').mean() * 100
     
     report.append("Key Metrics")
     report.append("-" * 20)
@@ -669,20 +656,23 @@ def generate_analysis_report(df, model=None, X_test=None, y_test=None, y_pred=No
         report.append("Model Performance")
         report.append("-" * 20)
         report.append(f"Model Type: {model_type}")
-        report.append(f"Accuracy: {accuracy_score(y_test, y_pred):.2f}")
-        report.append(f"F1-Score: {f1_score(y_test, y_pred):.2f}")
-        report.append(f"AUC-ROC: {roc_auc_score(y_test, model.predict_proba(X_test)[:, 1]):.2f}")
+        report.append(f"Accuracy: {accuracy_score(y_test, y_pred):.4f}")
+        report.append(f"F1-Score: {f1_score(y_test, y_pred):.4f}")
+        report.append(f"AUC-ROC: {roc_auc_score(y_test, y_pred_proba):.4f}")
         report.append("\nClassification Report:")
         report.append(classification_report(y_test, y_pred, target_names=['No Churn', 'Churn']))
         
         if model_type in ['XGBoost', 'RandomForest']:
-            feature_importance = pd.DataFrame({
-                'feature': X_test.columns,
-                'importance': model.feature_importances_
-            }).sort_values(by='importance', ascending=False)
-            report.append("\nFeature Importance (Top 5):")
-            for i, row in feature_importance.head(5).iterrows():
-                report.append(f"- {row['feature']}: {row['importance']:.3f}")
+            try:
+                feature_importance = pd.DataFrame({
+                    'feature': X_test.columns,
+                    'importance': model.feature_importances_
+                }).sort_values(by='importance', ascending=False)
+                report.append("\nFeature Importance (Top 10):")
+                for i, row in feature_importance.head(10).iterrows():
+                    report.append(f"- {row['feature']}: {row['importance']:.4f}")
+            except:
+                report.append("\nFeature importance not available for this model type")
     
     report.append("\nGenerated by Churn Analytics Dashboard")
     report.append(f"Date: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -692,7 +682,7 @@ def generate_analysis_report(df, model=None, X_test=None, y_test=None, y_pred=No
 if 'page' not in st.session_state:
     st.session_state.page = "Home"
 if 'model_params' not in st.session_state:
-    st.session_state.model_params = {'n_estimators': 100, 'max_depth': None}
+    st.session_state.model_params = {'n_estimators': 100, 'max_depth': 5, 'learning_rate': 0.1}
 if 'df' not in st.session_state:
     st.session_state.df = load_data()
 if 'quick_filter' not in st.session_state:
@@ -739,25 +729,23 @@ with st.sidebar.expander("Quick Filters", expanded=False):
         }
         st.rerun()
     if st.button("Senior Citizens", key="senior"):
-        st.session_state.quick_filter = {'SeniorCitizen': [1]}
+        st.session_state.quick_filter = {'SeniorCitizen': ['Yes']}
         st.rerun()
     if st.button("Reset Filters", key="reset_filters"):
         st.session_state.quick_filter = None
         st.rerun()
-
-
 
 # Model Parameters
 with st.sidebar.expander("Model Parameters", expanded=False):
     st.markdown("<h4>Adjust Model Settings</h4>", unsafe_allow_html=True)
     model_type = st.selectbox("Model Type", ["XGBoost", "RandomForest", "LogisticRegression", "Stacking"], key="sidebar_model_type")
     if model_type == "XGBoost":
-        n_estimators = st.slider("Number of Trees", 50, 200, st.session_state.model_params.get('n_estimators', 100), step=10, key="n_estimators_xgb")
-        max_depth = st.slider("Max Depth", 3, 7, st.session_state.model_params.get('max_depth', 5), step=1, key="max_depth_xgb")
-        learning_rate = st.slider("Learning Rate", 0.05, 0.2, st.session_state.model_params.get('learning_rate', 0.1), step=0.01, key="learning_rate_xgb")
+        n_estimators = st.slider("Number of Trees", 50, 300, st.session_state.model_params.get('n_estimators', 100), step=10, key="n_estimators_xgb")
+        max_depth = st.slider("Max Depth", 3, 10, st.session_state.model_params.get('max_depth', 5), step=1, key="max_depth_xgb")
+        learning_rate = st.slider("Learning Rate", 0.01, 0.2, st.session_state.model_params.get('learning_rate', 0.1), step=0.01, key="learning_rate_xgb")
         st.session_state.model_params = {'n_estimators': n_estimators, 'max_depth': max_depth, 'learning_rate': learning_rate}
     elif model_type == "RandomForest":
-        n_estimators = st.slider("Number of Trees", 50, 200, st.session_state.model_params.get('n_estimators', 100), step=10, key="n_estimators_rf")
+        n_estimators = st.slider("Number of Trees", 50, 300, st.session_state.model_params.get('n_estimators', 100), step=10, key="n_estimators_rf")
         max_depth = st.slider("Max Depth", 5, 20, st.session_state.model_params.get('max_depth', 10), step=5, key="max_depth_rf")
         st.session_state.model_params = {'n_estimators': n_estimators, 'max_depth': max_depth}
     else:
@@ -776,14 +764,14 @@ with st.sidebar.expander("Download Reports", expanded=False):
             key="download_data"
         )
         
-        report_data = generate_analysis_report(st.session_state.df)
-        st.download_button(
-            label="Download Analysis Report",
-            data=report_data,
-            file_name="churn_analysis_report.txt",
-            mime="text/plain",
-            key="download_report"
-        )
+        if 'report_data' in st.session_state:
+            st.download_button(
+                label="Download Analysis Report",
+                data=st.session_state.report_data,
+                file_name="churn_analysis_report.txt",
+                mime="text/plain",
+                key="download_report"
+            )
 
 # Contact Us
 with st.sidebar.expander("Contact Us", expanded=True):
@@ -850,8 +838,8 @@ if df is not None:
                 if isinstance(value, list):
                     filtered_df = filtered_df[filtered_df[key].isin(value)]
                 elif isinstance(value, tuple):
-                    filtered_df = filtered_df[filtered_df[key].between(value[0], value[1])]
-                elif isinstance(value, (int, float)):
+                    filtered_df = filtered_df[(filtered_df[key] >= value[0]) & (filtered_df[key] <= value[1])]
+                elif isinstance(value, (int, float, str)):
                     filtered_df = filtered_df[filtered_df[key] == value]
             except Exception as e:
                 st.error(f"Error applying filter on {key}: {e}")
@@ -883,7 +871,7 @@ if df is not None:
         # Key Metrics Section
         st.markdown('<p class="sub-header">Key Metrics</p>', unsafe_allow_html=True)
         col1, col2, col3, col4 = st.columns(4, gap="medium")
-        churn_rate = filtered_df['Churn'].value_counts(normalize=True).get('Yes', 0) * 100
+        churn_rate = (filtered_df['Churn'] == 'Yes').mean() * 100
         total_customers = len(filtered_df)
         avg_tenure = filtered_df['tenure'].mean()
         avg_monthly = filtered_df['MonthlyCharges'].mean()
@@ -1012,11 +1000,11 @@ if df is not None:
         # Key Metrics
         st.markdown('<p class="sub-header">Key Metrics</p>', unsafe_allow_html=True)
         col1, col2, col3, col4, col5 = st.columns(5, gap="medium")
-        churn_rate = filtered_df['Churn'].value_counts(normalize=True).get('Yes', 0) * 100
+        churn_rate = (filtered_df['Churn'] == 'Yes').mean() * 100
         total_customers = len(filtered_df)
         avg_tenure = filtered_df['tenure'].mean()
         avg_monthly = filtered_df['MonthlyCharges'].mean()
-        senior_pct = (filtered_df['SeniorCitizen'] == 1).mean() * 100
+        senior_pct = (filtered_df['SeniorCitizen'] == 'Yes').mean() * 100
 
         with col1:
             st.markdown(f"""
@@ -1128,13 +1116,13 @@ if df is not None:
         st.markdown("""
         - **customerID**: Unique identifier for each customer.
         - **gender**: Gender of the customer (Male, Female).
-        - **SeniorCitizen**: Whether the customer is a senior citizen (1: Yes, 0: No).
+        - **SeniorCitizen**: Whether the customer is a senior citizen (Yes, No).
         - **Partner**: Whether the customer has a partner (Yes, No).
         - **Dependents**: Whether the customer has dependents (Yes, No).
         - **tenure**: Number of months the customer has stayed with the company.
         - **PhoneService**: Whether the customer has phone service (Yes, No).
         - **MultipleLines**: Whether the customer has multiple lines (Yes, No, No phone service).
-        - **InternetService**: Customer’s internet service provider (DSL, Fiber optic, No).
+        - **InternetService**: Customer's internet service provider (DSL, Fiber optic, No).
         - **OnlineSecurity, OnlineBackup, DeviceProtection, TechSupport, StreamingTV, StreamingMovies**: Additional services (Yes, No, No internet service).
         - **Contract**: Contract term (Month-to-month, One year, Two year).
         - **PaperlessBilling**: Whether the customer uses paperless billing (Yes, No).
@@ -1274,8 +1262,7 @@ if df is not None:
         st.plotly_chart(fig, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
-      # Churn Prediction
-        # Churn Prediction
+    # Churn Prediction
     elif st.session_state.page == "Churn Prediction":
         st.markdown('<p class="main-header">Churn Prediction Model</p>', unsafe_allow_html=True)
         
@@ -1284,14 +1271,14 @@ if df is not None:
         
         if df_clean is not None:
             # Verify required columns exist
-            required_cols = ['customerID', 'Churn']
+            required_cols = ['customerID', 'Churn', 'ChurnEncoded']
             missing_cols = [col for col in required_cols if col not in df_clean.columns]
             if missing_cols:
                 st.error(f"Required columns missing in preprocessed data: {', '.join(missing_cols)}. Please check the dataset.")
                 st.stop()
             
-            X = df_clean.drop(['customerID', 'Churn'], axis=1)
-            y = df_clean['Churn']
+            X = df_clean[feature_dict['encoded_columns']]
+            y = df_clean['ChurnEncoded']
             
             # Display class distribution for debugging
             st.markdown('<div class="chart-card">', unsafe_allow_html=True)
@@ -1312,7 +1299,7 @@ if df is not None:
             
             with st.spinner("Training model..."):
                 model_params = st.session_state.get('model_params', {})
-                model, X_test, y_test, y_pred = train_model(
+                model, X_test, y_test, y_pred, y_pred_proba = train_model(
                     X, y, model_type,
                     n_estimators=model_params.get('n_estimators', 100),
                     max_depth=model_params.get('max_depth', 5),
@@ -1320,14 +1307,16 @@ if df is not None:
                 )
             
             if model is not None:
-                report_data = generate_analysis_report(filtered_df, model, X_test, y_test, y_pred, model_type)
+                report_data = generate_analysis_report(
+                    filtered_df, model, X_test, y_test, y_pred, y_pred_proba, model_type
+                )
                 st.session_state['report_data'] = report_data
                 
                 st.markdown('<p class="sub-header">Model Performance</p>', unsafe_allow_html=True)
                 st.markdown('<div class="chart-card">', unsafe_allow_html=True)
-                st.write(f"**Accuracy**: {accuracy_score(y_test, y_pred):.2f}")
-                st.write(f"**F1-Score**: {f1_score(y_test, y_pred):.2f}")
-                st.write(f"**AUC-ROC**: {roc_auc_score(y_test, model.predict_proba(X_test)[:, 1]):.2f}")
+                st.write(f"**Accuracy**: {accuracy_score(y_test, y_pred):.4f}")
+                st.write(f"**F1-Score**: {f1_score(y_test, y_pred):.4f}")
+                st.write(f"**AUC-ROC**: {roc_auc_score(y_test, y_pred_proba):.4f}")
                 st.write("**Classification Report**:")
                 st.text(classification_report(y_test, y_pred, target_names=['No Churn', 'Churn']))
                 st.markdown('</div>', unsafe_allow_html=True)
@@ -1355,10 +1344,10 @@ if df is not None:
                         'importance': model.feature_importances_
                     }).sort_values(by='importance', ascending=False)
                     fig = px.bar(
-                        feature_importance,
+                        feature_importance.head(20),
                         x='importance',
                         y='feature',
-                        title="Feature Importance",
+                        title="Top 20 Feature Importance",
                         color_discrete_sequence=['#2DD4BF'],
                         template='plotly_dark'
                     )
@@ -1371,69 +1360,123 @@ if df is not None:
                 st.write("Enter customer details below to predict churn probability.")
                 
                 with st.form("prediction_form"):
-                    cols = st.columns(4)
+                    cols = st.columns(2)
                     inputs = {}
-                    for i, col in enumerate(df.columns):
-                        if col in ['customerID', 'Churn']:
-                            continue
-                        with cols[i % 4]:
-                            if col in feature_dict['numerical_cols']:
-                                min_val = float(df[col].min()) if col != 'ChargesPerMonth' else float(df['TotalCharges'].div(df['tenure'] + 1).min())
-                                max_val = float(df[col].max()) if col != 'ChargesPerMonth' else float(df['TotalCharges'].div(df['tenure'] + 1).max())
-                                avg_val = float(df[col].mean()) if col != 'ChargesPerMonth' else float(df['TotalCharges'].div(df['tenure'] + 1).mean())
-                                inputs[col] = st.number_input(
-                                    f"{col}",
-                                    min_value=min_val,
-                                    max_value=max_val,
-                                    value=avg_val,
-                                    help=f"Enter a value for {col} (range: {min_val:.2f} to {max_val:.2f})",
-                                    key=f"input_{col}"
-                                )
-                            else:
-                                unique_vals = list(df[col].unique())
-                                inputs[col] = st.selectbox(
-                                    f"{col}",
-                                    unique_vals,
-                                    help=f"Select a value for {col}",
-                                    key=f"pred_{col}"
-                                )
                     
-                    # Add ServiceCount input
-                    with cols[i % 4]:
-                        inputs['ServiceCount'] = st.number_input(
-                            "ServiceCount",
-                            min_value=0.0,
-                            max_value=9.0,
-                            value=3.0,
-                            help="Number of subscribed services (0-9)",
-                            key="input_ServiceCount"
-                        )
+                    # Basic Info
+                    with cols[0]:
+                        st.subheader("Basic Information")
+                        inputs['gender'] = st.selectbox("Gender", ['Male', 'Female'])
+                        inputs['SeniorCitizen'] = st.selectbox("Senior Citizen", ['Yes', 'No'])
+                        inputs['Partner'] = st.selectbox("Partner", ['Yes', 'No'])
+                        inputs['Dependents'] = st.selectbox("Dependents", ['Yes', 'No'])
+                        inputs['tenure'] = st.slider("Tenure (months)", 0, 100, 12)
+                        
+                    # Services
+                    with cols[1]:
+                        st.subheader("Services")
+                        inputs['PhoneService'] = st.selectbox("Phone Service", ['Yes', 'No'])
+                        inputs['MultipleLines'] = st.selectbox("Multiple Lines", ['Yes', 'No', 'No phone service'])
+                        inputs['InternetService'] = st.selectbox("Internet Service", ['DSL', 'Fiber optic', 'No'])
+                        inputs['OnlineSecurity'] = st.selectbox("Online Security", ['Yes', 'No', 'No internet service'])
+                        inputs['OnlineBackup'] = st.selectbox("Online Backup", ['Yes', 'No', 'No internet service'])
+                        inputs['DeviceProtection'] = st.selectbox("Device Protection", ['Yes', 'No', 'No internet service'])
+                        inputs['TechSupport'] = st.selectbox("Tech Support", ['Yes', 'No', 'No internet service'])
+                        inputs['StreamingTV'] = st.selectbox("Streaming TV", ['Yes', 'No', 'No internet service'])
+                        inputs['StreamingMovies'] = st.selectbox("Streaming Movies", ['Yes', 'No', 'No internet service'])
+                        
+                    # Billing
+                    st.subheader("Billing Information")
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        inputs['Contract'] = st.selectbox("Contract", ['Month-to-month', 'One year', 'Two year'])
+                    with col2:
+                        inputs['PaperlessBilling'] = st.selectbox("Paperless Billing", ['Yes', 'No'])
+                    with col3:
+                        inputs['PaymentMethod'] = st.selectbox("Payment Method", [
+                            'Electronic check', 'Mailed check', 'Bank transfer (automatic)', 'Credit card (automatic)'
+                        ])
+                    
+                    # Charges
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        inputs['MonthlyCharges'] = st.number_input("Monthly Charges", min_value=0.0, max_value=200.0, value=70.0)
+                    with col2:
+                        inputs['TotalCharges'] = st.number_input("Total Charges", min_value=0.0, max_value=10000.0, value=1000.0)
                     
                     submit = st.form_submit_button("Predict Churn")
                     
                     if submit:
                         with st.spinner("Making prediction..."):
-                            input_data = pd.DataFrame([inputs])
                             try:
-                                # Apply one-hot encoding to input data
-                                input_data = pd.get_dummies(input_data)
-                                # Align columns with training data
-                                for col in X.columns:
-                                    if col not in input_data.columns:
-                                        input_data[col] = 0
-                                input_data = input_data[X.columns]
+                                # Create DataFrame from inputs
+                                input_df = pd.DataFrame([inputs])
+                                
+                                # Feature engineering
+                                input_df['ChargesPerMonth'] = input_df['TotalCharges'] / (input_df['tenure'] + 1)
+                                input_df['ServiceCount'] = input_df.apply(lambda row: sum(
+                                    1 for col in feature_dict['service_cols'] 
+                                    if (row[col] == 'Yes' if col != 'InternetService' else row[col] in ['DSL', 'Fiber optic'])
+                                , axis=1)
+                                
+                                # One-hot encoding
+                                input_df = pd.get_dummies(input_df, columns=feature_dict['categorical_cols'], drop_first=True)
+                                
+                                # Ensure all columns are present
+                                for col in feature_dict['encoded_columns']:
+                                    if col not in input_df.columns:
+                                        input_df[col] = 0
+                                
+                                # Reorder columns to match training data
+                                input_df = input_df[feature_dict['encoded_columns']]
+                                
                                 # Scale numerical features
-                                input_data[feature_dict['numerical_cols']] = feature_dict['scaler'].transform(
-                                    input_data[feature_dict['numerical_cols']]
+                                input_df[feature_dict['numerical_cols']] = feature_dict['scaler'].transform(
+                                    input_df[feature_dict['numerical_cols']]
                                 )
-                                prediction = model.predict(input_data)
-                                prob = model.predict_proba(input_data)[0]
-                                # Decode prediction back to 'No'/'Yes' for display
+                                
+                                # Make prediction
+                                prediction = model.predict(input_df)
+                                prob = model.predict_proba(input_df)[0]
+                                
+                                # Decode prediction
                                 prediction_label = feature_dict['churn_encoder'].inverse_transform(prediction)[0]
+                                
+                                # Display results
                                 st.markdown('<div class="metric-box">', unsafe_allow_html=True)
                                 st.write(f"**Prediction**: {prediction_label}")
                                 st.write(f"**Churn Probability**: {prob[1]:.2%}")
                                 st.markdown('</div>', unsafe_allow_html=True)
+                                
+                                # Show feature importance for this prediction (if available)
+                                if model_type in ['XGBoost', 'RandomForest']:
+                                    st.markdown('<p class="sub-header">Prediction Explanation</p>', unsafe_allow_html=True)
+                                    st.markdown('<div class="chart-card">', unsafe_allow_html=True)
+                                    
+                                    if model_type == 'XGBoost':
+                                        explainer = xgb.Booster()
+                                        explainer.load_model(model.get_booster().save_raw())
+                                        importance = explainer.get_score(importance_type='weight')
+                                        importance_df = pd.DataFrame({
+                                            'feature': list(importance.keys()),
+                                            'importance': list(importance.values())
+                                        }).sort_values('importance', ascending=False).head(10)
+                                        
+                                        fig = px.bar(
+                                            importance_df,
+                                            x='importance',
+                                            y='feature',
+                                            title="Top Features Influencing This Prediction",
+                                            color_discrete_sequence=['#2DD4BF'],
+                                            template='plotly_dark'
+                                        )
+                                        fig.update_layout(title_x=0.5, margin=dict(t=50, b=20))
+                                        st.plotly_chart(fig, use_container_width=True)
+                                    else:
+                                        st.write("Feature importance for individual predictions is currently only available for XGBoost models.")
+                                    
+                                    st.markdown('</div>', unsafe_allow_html=True)
+                                
                             except Exception as e:
-                                st.error(f"Prediction error: {e}. Please check input data.")
+                                st.error(f"Prediction error: {str(e)}. Please check input data.")
                 st.markdown('</div>', unsafe_allow_html=True)
