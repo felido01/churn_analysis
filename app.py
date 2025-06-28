@@ -1406,77 +1406,48 @@ if df is not None:
                     
                     submit = st.form_submit_button("Predict Churn")
                     
-                    if submit:
-                        with st.spinner("Making prediction..."):
-                            try:
-                                # Create DataFrame from inputs
-                                input_df = pd.DataFrame([inputs])
-                                
-                                # Feature engineering
-                                input_df['ChargesPerMonth'] = input_df['TotalCharges'] / (input_df['tenure'] + 1)
-                                input_df['ServiceCount'] = input_df.apply(lambda row: sum(
-                                    1 for col in feature_dict['service_cols'] 
-                                    if (row[col] == 'Yes' if col != 'InternetService' else row[col] in ['DSL', 'Fiber optic'])
-                                , axis=1)
-                                
-                                # One-hot encoding
-                                input_df = pd.get_dummies(input_df, columns=feature_dict['categorical_cols'], drop_first=True)
-                                
-                                # Ensure all columns are present
-                                for col in feature_dict['encoded_columns']:
-                                    if col not in input_df.columns:
-                                        input_df[col] = 0
-                                
-                                # Reorder columns to match training data
-                                input_df = input_df[feature_dict['encoded_columns']]
-                                
-                                # Scale numerical features
-                                input_df[feature_dict['numerical_cols']] = feature_dict['scaler'].transform(
-                                    input_df[feature_dict['numerical_cols']]
-                                )
-                                
-                                # Make prediction
-                                prediction = model.predict(input_df)
-                                prob = model.predict_proba(input_df)[0]
-                                
-                                # Decode prediction
-                                prediction_label = feature_dict['churn_encoder'].inverse_transform(prediction)[0]
-                                
-                                # Display results
-                                st.markdown('<div class="metric-box">', unsafe_allow_html=True)
-                                st.write(f"**Prediction**: {prediction_label}")
-                                st.write(f"**Churn Probability**: {prob[1]:.2%}")
-                                st.markdown('</div>', unsafe_allow_html=True)
-                                
-                                # Show feature importance for this prediction (if available)
-                                if model_type in ['XGBoost', 'RandomForest']:
-                                    st.markdown('<p class="sub-header">Prediction Explanation</p>', unsafe_allow_html=True)
-                                    st.markdown('<div class="chart-card">', unsafe_allow_html=True)
-                                    
-                                    if model_type == 'XGBoost':
-                                        explainer = xgb.Booster()
-                                        explainer.load_model(model.get_booster().save_raw())
-                                        importance = explainer.get_score(importance_type='weight')
-                                        importance_df = pd.DataFrame({
-                                            'feature': list(importance.keys()),
-                                            'importance': list(importance.values())
-                                        }).sort_values('importance', ascending=False).head(10)
-                                        
-                                        fig = px.bar(
-                                            importance_df,
-                                            x='importance',
-                                            y='feature',
-                                            title="Top Features Influencing This Prediction",
-                                            color_discrete_sequence=['#2DD4BF'],
-                                            template='plotly_dark'
-                                        )
-                                        fig.update_layout(title_x=0.5, margin=dict(t=50, b=20))
-                                        st.plotly_chart(fig, use_container_width=True)
-                                    else:
-                                        st.write("Feature importance for individual predictions is currently only available for XGBoost models.")
-                                    
-                                    st.markdown('</div>', unsafe_allow_html=True)
-                                
-                            except Exception as e:
-                                st.error(f"Prediction error: {str(e)}. Please check input data.")
+                   if submit:
+    with st.spinner("Making prediction..."):
+        try:
+            # Create DataFrame from inputs
+            input_df = pd.DataFrame([inputs])
+            
+            # Feature engineering
+            input_df['ChargesPerMonth'] = input_df['TotalCharges'] / (input_df['tenure'] + 1)
+            input_df['ServiceCount'] = input_df.apply(lambda row: sum(
+                1 for col in feature_dict['service_cols'] 
+                if (row[col] == 'Yes' if col != 'InternetService' else row[col] in ['DSL', 'Fiber optic'])
+            , axis=1)
+            
+            # One-hot encoding
+            input_df = pd.get_dummies(input_df, columns=feature_dict['categorical_cols'], drop_first=True)
+            
+            # Ensure all columns are present
+            for col in feature_dict['encoded_columns']:
+                if col not in input_df.columns:
+                    input_df[col] = 0
+            
+            # Reorder columns to match training data
+            input_df = input_df[feature_dict['encoded_columns']]
+            
+            # Scale numerical features
+            input_df[feature_dict['numerical_cols']] = feature_dict['scaler'].transform(
+                input_df[feature_dict['numerical_cols']]
+            )
+            
+            # Make prediction
+            prediction = model.predict(input_df)
+            prob = model.predict_proba(input_df)[0]
+            
+            # Decode prediction
+            prediction_label = feature_dict['churn_encoder'].inverse_transform(prediction)[0]
+            
+            # Display results
+            st.markdown('<div class="metric-box">', unsafe_allow_html=True)
+            st.write(f"**Prediction**: {prediction_label}")
+            st.write(f"**Churn Probability**: {prob[1]:.2%}")
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+        except Exception as e:
+            st.error(f"Prediction error: {str(e)}. Please check input data.")
                 st.markdown('</div>', unsafe_allow_html=True)
